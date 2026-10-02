@@ -1,0 +1,71 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" title="Groups" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      <p class="page-note">Each group is one tee time, up to four players. A 4-player team takes the whole time. Two 2-player teams share one. Individuals can be a threesome.</p>
+
+      @if (groups.length === 0) {
+        <p class="page-note">No tee times yet.</p>
+      } @else {
+        <div class="card">
+          @for (group of groups; track group.groupId) {
+            <div class="row row-static">
+              <span class="row-body">
+                <label class="field">
+                  <span class="field-label">Tee time</span>
+                  <input type="time" [value]="group.teeTime" (change)="setTime(group.groupId, $event)" />
+                </label>
+                <span class="row-meta">{{ slots(group) }} of 4</span>
+                <span class="inline-actions">
+                  @for (member of group.members; track memberKey(member)) {
+                    <button class="btn-secondary" type="button" [disabled]="busy" (click)="removeMember(group, member)">
+                      {{ member.displayName }} &#10005;
+                    </button>
+                  }
+                  <button class="btn-secondary" type="button" [disabled]="busy" (click)="removeGroup(group.groupId)">Delete</button>
+                </span>
+              </span>
+              @if (!isFull(group.groupId)) {
+                <button class="add-button" type="button" (click)="targetGroupId = group.groupId">
+                  {{ targetGroupId === group.groupId ? 'Picking' : 'Add to' }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <button class="btn-primary" type="button" (click)="add()">Add group</button>
+
+      @if (teamFormat && dashboard.teams.length === 0) {
+        <p class="page-note">Set up teams first, then add each team to a tee time.</p>
+      } @else if (hasUnassigned && targetGroupId !== null && !isFull(targetGroupId)) {
+        <p class="section-label">{{ teamFormat ? 'Tap a team to add it' : 'Tap a player to add them' }}</p>
+        <div class="card">
+          @if (teamFormat) {
+            @for (team of unassignedTeams; track team.teamId) {
+              <button class="row" type="button" [disabled]="busy" (click)="place(team.teamId)">
+                <span class="row-body"><span class="row-title">{{ team.name }}</span></span>
+                <span class="chevron">&#8250;</span>
+              </button>
+            }
+          } @else {
+            @for (player of unassignedPlayers; track player.userId) {
+              <button class="row" type="button" [disabled]="busy" (click)="place(player.userId)">
+                <span class="row-body"><span class="row-title">{{ player.displayName }}</span></span>
+                <span class="chevron">&#8250;</span>
+              </button>
+            }
+          }
+        </div>
+      } @else if (hasUnassigned && groups.length > 0) {
+        <p class="page-note">Choose Add to on a tee time, then pick who is in it.</p>
+      } @else if (groups.length > 0 && (teamFormat ? dashboard.teams.length > 0 : dashboard.registrations.length > 0)) {
+        <p class="page-note">Everyone signed up is in a group.</p>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

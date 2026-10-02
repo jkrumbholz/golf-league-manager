@@ -1,0 +1,43 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" action="menu" title="Profile" [backTo]="['/leagues']"></app-shell>
+
+    <form class="form" (ngSubmit)="save()">
+      <div class="photo-row">
+        @if (profilePictureUrl && pictureVisible) {
+          <img class="avatar" [src]="profilePictureUrl" alt="" (error)="pictureVisible = false" />
+        }
+        <label class="btn-secondary file-button">
+          {{ uploading ? 'Uploading' : 'Choose photo' }}
+          <input type="file" accept="image/jpeg,image/png,image/webp" [disabled]="uploading" (change)="onPicture($event)" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="field-label">First name</span>
+        <input name="firstName" [(ngModel)]="firstName" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Last name</span>
+        <input name="lastName" [(ngModel)]="lastName" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Display name</span>
+        <input name="displayName" [(ngModel)]="displayName" />
+        <span class="field-hint">This is the name on the leaderboard.</span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Handicap index</span>
+        <input name="handicapIndex" type="number" inputmode="decimal" step="0.1" [(ngModel)]="handicapIndex" />
+      </label>
+
+      @if (error) { <p class="error">{{ error }}</p> }
+      @if (saved) { <p class="page-note">Saved.</p> }
+
+      <button class="btn-primary" type="submit">Save</button>
+    </form>
+  </div>
+</div>

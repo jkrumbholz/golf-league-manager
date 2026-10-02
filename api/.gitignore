@@ -1,0 +1,14 @@
+# Compiled output next to TypeScript sources (tsc has no outDir)
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+!jest.config.js
+
+node_modules/
+
+# CDK asset staging and synth output
+.cdk.staging
+cdk.out
+
+coverage/

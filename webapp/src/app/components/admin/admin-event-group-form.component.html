@@ -1,0 +1,17 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="close" action="none" title="New group" [backTo]="backTo"></app-shell>
+
+    <form class="form" (ngSubmit)="save()">
+      <label class="field">
+        <span class="field-label">Tee time</span>
+        <input name="teeTime" type="time" [(ngModel)]="teeTime" />
+        @if (fieldErrors['teeTime']) { <span class="field-error">{{ fieldErrors['teeTime'] }}</span> }
+        <span class="field-hint">When this foursome tees off.</span>
+      </label>
+
+      <button class="btn-primary" type="submit" [disabled]="busy">Save group</button>
+      @if (error) { <p class="error">{{ error }}</p> }
+    </form>
+  </div>
+</div>

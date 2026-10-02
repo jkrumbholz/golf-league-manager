@@ -1,0 +1,45 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="close" action="none" title="Edit player" [backTo]="backTo" [queryParams]="{ tab: 'players' }"></app-shell>
+
+    @if (loaded) {
+      <form class="form" (ngSubmit)="save()">
+        <label class="field">
+          <span class="field-label">First name</span>
+          <input name="firstName" [(ngModel)]="firstName" />
+          @if (fieldErrors['firstName']) { <span class="field-error">{{ fieldErrors['firstName'] }}</span> }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Last name</span>
+          <input name="lastName" [(ngModel)]="lastName" />
+          @if (fieldErrors['lastName']) { <span class="field-error">{{ fieldErrors['lastName'] }}</span> }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Display name</span>
+          <input name="displayName" [(ngModel)]="displayName" />
+          @if (fieldErrors['displayName']) {
+            <span class="field-error">{{ fieldErrors['displayName'] }}</span>
+          } @else {
+            <span class="field-hint">This is the name on the leaderboard.</span>
+          }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Handicap index</span>
+          <input name="handicapIndex" type="number" inputmode="decimal" step="0.1" [(ngModel)]="handicapIndex" />
+          @if (fieldErrors['handicapIndex']) {
+            <span class="field-error">{{ fieldErrors['handicapIndex'] }}</span>
+          } @else {
+            <span class="field-hint">Strokes on every round use this index.</span>
+          }
+        </label>
+
+        <button class="btn-primary" type="submit" [disabled]="saving">Save player</button>
+      </form>
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

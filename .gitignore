@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Angular build output and caches
+dist/
+.angular/
+out-tsc/
+*.tsbuildinfo
+
+# Deploy build folders produced by webapp/deploy.py
+dev-build/
+production-build/
+
+# CDK synth output
+cdk.out/
+.cdk.staging/
+
+# Tests and coverage
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+.vscode/

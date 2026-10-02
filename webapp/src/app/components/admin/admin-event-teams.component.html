@@ -1,0 +1,64 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" action="none" title="Teams" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      <p class="section-label">Teams of {{ teamSize }}</p>
+
+      @if (dashboard.teams.length === 0) {
+        <p class="page-note">No teams yet. Pick a player below to start the first one.</p>
+      } @else {
+        <div class="card">
+          @for (team of dashboard.teams; track team.teamId) {
+            <div class="row row-static">
+              <span class="row-body">
+                <span class="row-title">{{ team.name }}</span>
+                <span class="row-meta">{{ team.members.length }} of {{ teamSize }}</span>
+                <span class="inline-actions">
+                  @for (member of team.members; track member.userId) {
+                    <button class="btn-secondary" type="button" [disabled]="busy" (click)="removeFromTeam(team.teamId, member.userId)">
+                      {{ member.displayName }} &#10005;
+                    </button>
+                  }
+                </span>
+              </span>
+              @if (!isFull(team.teamId)) {
+                <button class="add-button" type="button" (click)="targetTeamId = team.teamId">
+                  {{ targetTeamId === team.teamId ? 'Picking' : 'Add to' }}
+                </button>
+              }
+              <button class="btn-quiet btn-danger" type="button" [disabled]="busy" (click)="removeTeam(team.teamId)">Delete</button>
+            </div>
+          }
+        </div>
+      }
+
+      @if (unassigned.length > 0) {
+        <p class="section-label">
+          @if (targetTeamId === null) {
+            Tap a player to start a new team
+          } @else {
+            Tap a player to add them to the chosen team
+          }
+        </p>
+
+        <div class="card">
+          @for (player of unassigned; track player.userId) {
+            <button class="row" type="button" [disabled]="busy" (click)="place(player.userId)">
+              <span class="row-body"><span class="row-title">{{ player.displayName }}</span></span>
+              <span class="chevron">&#8250;</span>
+            </button>
+          }
+        </div>
+
+        @if (targetTeamId !== null) {
+          <button class="btn-secondary btn-wide" type="button" (click)="targetTeamId = null">Start a new team instead</button>
+        }
+      } @else {
+        <p class="page-note">Everyone signed up is on a team.</p>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

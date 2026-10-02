@@ -1,0 +1,18 @@
+@if (open) {
+  <button class="scrim" type="button" aria-label="Close menu" (click)="close()"></button>
+  <nav class="drawer">
+    <div class="drawer-user">
+      @if (auth.user()?.profilePictureUrl) {
+        <img class="avatar avatar-row" [src]="auth.user()?.profilePictureUrl" alt="" (error)="hideImage($event)" />
+      }
+      <span>Signed in as {{ auth.user()?.displayName }}</span>
+    </div>
+    <a routerLink="/leagues" (click)="close()">My leagues</a>
+    @if (organizer) {
+      <div class="drawer-label">Organizer</div>
+      <a routerLink="/admin/leagues" (click)="close()">Admin</a>
+    }
+    <a routerLink="/profile" (click)="close()">Profile</a>
+    <button class="drawer-logout" type="button" (click)="logout()">Log out</button>
+  </nav>
+}

@@ -1,0 +1,43 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" action="none" title="Side games" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      <form class="form" (ngSubmit)="save()">
+        @if (dashboard.event.ctpEnabled) {
+          <label class="field">
+            <span class="field-label">Closest to the pin &mdash; {{ dashboard.event.ctpEntryFee }} entry</span>
+            <select name="ctpWinner" [(ngModel)]="ctpWinner">
+              <option [ngValue]="null">No winner yet</option>
+              @for (player of ctpPlayers; track player.userId) {
+                <option [ngValue]="player.userId">{{ player.displayName }}</option>
+              }
+            </select>
+            @if (ctpPlayers.length === 0) {
+              <span class="field-hint">Mark CTP paid on the players screen before you pick a winner.</span>
+            }
+          </label>
+        }
+
+        @if (dashboard.event.longDriveEnabled) {
+          <label class="field">
+            <span class="field-label">Long drive &mdash; {{ dashboard.event.longDriveEntryFee }} entry</span>
+            <select name="longDriveWinner" [(ngModel)]="longDriveWinner">
+              <option [ngValue]="null">No winner yet</option>
+              @for (player of longDrivePlayers; track player.userId) {
+                <option [ngValue]="player.userId">{{ player.displayName }}</option>
+              }
+            </select>
+            @if (longDrivePlayers.length === 0) {
+              <span class="field-hint">Mark Long Drive paid on the players screen before you pick a winner.</span>
+            }
+          </label>
+        }
+
+        @if (error) { <p class="error">{{ error }}</p> }
+
+        <button class="btn-primary" type="submit" [disabled]="busy">Save winners</button>
+      </form>
+    }
+  </div>
+</div>

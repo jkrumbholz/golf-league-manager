@@ -1,0 +1,33 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell title="My leagues" action="menu"></app-shell>
+
+    @if (!loading && leagues.length > 1) {
+      <p class="section-label">Pick a league</p>
+      <div class="card">
+        @for (league of leagues; track league.id) {
+          <a class="row" [routerLink]="['/leagues', league.id]">
+            @if (league.logoImageUrl) {
+              <img class="avatar avatar-row" [src]="league.logoImageUrl" alt="" (error)="league.logoImageUrl = ''" />
+            }
+            <span class="row-body">
+              <span class="row-title">{{ league.name }}</span>
+              <span class="row-meta">{{ meta(league) }}</span>
+            </span>
+            @if (league.liveEventId) { <span class="pill">Live</span> }
+            <span class="chevron">&#8250;</span>
+          </a>
+        }
+      </div>
+    }
+
+    @if (!loading && leagues.length === 0) {
+      <p class="page-note">You're not in a league yet. Ask your organizer to add you.</p>
+      @if (organizer) {
+        <a class="btn-primary" routerLink="/admin/leagues/new">Create a league</a>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

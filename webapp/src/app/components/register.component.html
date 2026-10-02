@@ -1,0 +1,37 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="close" action="none" title="Create account" [backTo]="['/login']"></app-shell>
+
+    <form class="form" (ngSubmit)="submit()">
+      <label class="field">
+        <span class="field-label">First name</span>
+        <input name="firstName" [(ngModel)]="firstName" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Last name</span>
+        <input name="lastName" [(ngModel)]="lastName" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Username</span>
+        <input name="username" autocapitalize="none" autocomplete="username" [(ngModel)]="username" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Password</span>
+        <input name="password" type="password" autocomplete="new-password" [(ngModel)]="password" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Handicap index</span>
+        <input name="handicapIndex" type="number" inputmode="decimal" step="0.1" [(ngModel)]="handicapIndex" />
+      </label>
+
+      @if (error) { <p class="error">{{ error }}</p> }
+
+      <button class="btn-primary" type="submit">Create account</button>
+      <p class="field-hint">Your display name starts as your first name plus the first letter of your last name.</p>
+    </form>
+  </div>
+</div>

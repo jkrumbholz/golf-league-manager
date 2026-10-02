@@ -1,0 +1,59 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="close" action="none" [title]="title" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      <form class="form" (ngSubmit)="save()">
+        <label class="field">
+          <span class="field-label">Place</span>
+          <input name="place" type="number" inputmode="numeric" min="1" [(ngModel)]="place" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Amount</span>
+          <input name="amount" type="number" inputmode="decimal" step="0.01" [(ngModel)]="amount" />
+          @if (fieldErrors['amount']) { <span class="field-error">{{ fieldErrors['amount'] }}</span> }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Winner</span>
+          @if (winnerChoices.length === 0) {
+            <span class="field-hint">{{ teamEvent ? 'Add teams before you can name a winner.' : 'Nobody is signed up yet.' }}</span>
+          } @else {
+            <select name="winnerId" [(ngModel)]="winnerId">
+              <option [ngValue]="null">Decide later</option>
+              @for (choice of winnerChoices; track choice.id) {
+                <option [ngValue]="choice.id">{{ choice.name }}</option>
+              }
+            </select>
+            <span class="field-hint">{{ teamEvent ? 'Standings are listed first.' : 'Players with a score are listed first.' }}</span>
+          }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Note</span>
+          <input name="description" [(ngModel)]="description" placeholder="Closest to the pin, hole 7" />
+        </label>
+
+        @if (error) { <p class="error">{{ error }}</p> }
+
+        <button class="btn-primary" type="submit" [disabled]="busy">Save payout</button>
+      </form>
+
+      @if (suggestions.length > 0) {
+        <p class="section-label">Suggested from a {{ money(placePot) }} pot</p>
+        <div class="card">
+          @for (item of suggestions; track item.place) {
+            <button class="row" type="button" (click)="applySuggestion(item)">
+              <span class="row-body">
+                <span class="row-title">{{ placeName(item.place) }}</span>
+                <span class="row-meta">{{ money(item.amount) }}</span>
+              </span>
+            </button>
+          }
+        </div>
+        <p class="page-note">{{ suggestionNote }}</p>
+      }
+    }
+  </div>
+</div>

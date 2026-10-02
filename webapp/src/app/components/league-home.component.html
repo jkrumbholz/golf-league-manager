@@ -1,0 +1,90 @@
+<div class="screen has-tabbar">
+  <div class="screen-inner">
+    <app-shell nav="back" action="menu" [title]="leagueName" [backTo]="['/leagues']"></app-shell>
+
+    @if (logoImageUrl) {
+      <img class="avatar avatar-logo league-logo" [src]="logoImageUrl" alt="" (error)="logoImageUrl = ''" />
+    }
+
+    @switch (tab) {
+      @case ('events') {
+        @if (seasonName) { <p class="section-label">{{ seasonName }}</p> }
+
+        @if (liveEvent) {
+          <section class="hero">
+            <span class="pill">Live now</span>
+            <h2 class="hero-title">{{ liveEvent.name }}</h2>
+            <p class="hero-meta">{{ eventMeta(liveEvent) }}</p>
+            <a class="hero-link" [routerLink]="['/events', liveEvent.id]">View leaderboard &#8250;</a>
+          </section>
+        }
+
+        <p class="section-label">Upcoming events</p>
+        @if (upcoming.length === 0) {
+          <p class="page-note">No events scheduled yet.</p>
+        } @else {
+          <div class="card">
+            @for (event of upcoming; track event.id) {
+              <a class="row" [routerLink]="['/events', event.id]">
+                <span class="row-body">
+                  <span class="row-title">{{ event.name }}</span>
+                  <span class="row-meta">{{ eventMeta(event) }}</span>
+                </span>
+                <span class="chevron">&#8250;</span>
+              </a>
+            }
+          </div>
+        }
+
+        @if (past.length > 0) {
+          <p class="section-label">Finished</p>
+          <div class="card">
+            @for (event of past; track event.id) {
+              <a class="row" [routerLink]="['/events', event.id]">
+                <span class="row-body">
+                  <span class="row-title">{{ event.name }}</span>
+                  <span class="row-meta">{{ eventMeta(event) }}</span>
+                </span>
+                <span class="pill pill-muted">Done</span>
+                <span class="chevron">&#8250;</span>
+              </a>
+            }
+          </div>
+        }
+      }
+
+      @case ('standings') {
+        <p class="section-label">Season standings</p>
+        <p class="page-note">
+          Season standings are not calculated yet. Every event keeps its own leaderboard, so
+          decide how a season should be scored (points per finish, best n rounds, total strokes)
+          and it can be added here.
+        </p>
+      }
+
+      @case ('players') {
+        <p class="section-label">{{ members.length }} players</p>
+        <div class="card">
+          @for (member of members; track member.userId) {
+            <div class="row row-static">
+              <span class="row-body">
+                <span class="row-title">{{ member.displayName }}</span>
+                <span class="row-meta">{{ member.role }} · {{ member.handicapIndex }} index</span>
+              </span>
+            </div>
+          }
+        </div>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+
+  <nav class="tabbar">
+    <div class="tabbar-inner">
+      <a [routerLink]="['/leagues', leagueId]" [class.active]="tab === 'events'">Events</a>
+      <a [routerLink]="['/leagues', leagueId]" [queryParams]="{ tab: 'standings' }" [class.active]="tab === 'standings'">Standings</a>
+      <a [routerLink]="['/leagues', leagueId]" [queryParams]="{ tab: 'players' }" [class.active]="tab === 'players'">Players</a>
+    </div>
+  </nav>
+</div>

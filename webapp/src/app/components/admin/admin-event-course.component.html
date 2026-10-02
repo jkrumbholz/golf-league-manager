@@ -1,0 +1,78 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="close" action="none" title="Course" [backTo]="backTo"></app-shell>
+
+    <form class="form" (ngSubmit)="save()">
+      <label class="field">
+        <span class="field-label">Facility</span>
+        <select name="facilityId" [(ngModel)]="facilityId" (ngModelChange)="onFacilityChange()">
+          <option [ngValue]="null">Choose a facility</option>
+          @for (facility of facilities; track facility.id) {
+            <option [ngValue]="facility.id">{{ facility.name }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Course setup</span>
+        <select name="configurationId" [(ngModel)]="configurationId">
+          <option [ngValue]="null">Choose a setup</option>
+          @for (configuration of configurations; track configuration.id) {
+            <option [ngValue]="configuration.id">{{ configuration.name }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Play date</span>
+        <input name="playDate" type="date" [(ngModel)]="playDate" />
+      </label>
+
+      <button class="btn-secondary btn-wide" type="button" (click)="loadCourse()">Load holes</button>
+
+      @if (draftTees.length > 0) {
+        <p class="section-label">Tee ladder &mdash; front to back</p>
+        <div class="card card-flush">
+          @for (tee of draftTees; track tee.platformTeeSetId; let index = $index) {
+            <div class="row row-static">
+              <span class="row-body"><span class="row-title">{{ index + 1 }}. {{ tee.name }}</span></span>
+              <button class="icon-button" type="button" (click)="moveTee(index, -1)" aria-label="Move forward">&#8593;</button>
+              <button class="icon-button" type="button" (click)="moveTee(index, 1)" aria-label="Move back">&#8595;</button>
+            </div>
+          }
+        </div>
+
+        @if (runningTee) {
+          <label class="field">
+            <span class="field-label">Starting tee</span>
+            <select (change)="setStartingTee($any($event.target).value)">
+              @for (tee of draftTees; track tee.platformTeeSetId) {
+                <option [value]="tee.platformTeeSetId">{{ tee.name }}</option>
+              }
+            </select>
+          </label>
+          <p class="field-hint">Up &amp; Back starts here and moves along the ladder as teams win holes.</p>
+        } @else {
+          <p class="section-label">Tee per hole</p>
+          @for (hole of draftHoles; track hole.sequence) {
+            <label class="field">
+              <span class="field-label">Hole {{ hole.displayHoleNumber || hole.sequence }} &middot; par {{ hole.par }}</span>
+              <select [name]="'tee' + hole.sequence" [(ngModel)]="hole.platformTeeSetId" (ngModelChange)="teeChanged(hole)">
+                @for (tee of draftTees; track tee.platformTeeSetId) {
+                  <option [ngValue]="tee.platformTeeSetId">{{ tee.name }}</option>
+                }
+              </select>
+            </label>
+          }
+        }
+
+        <p class="field-hint">Saving the course again clears the scores already entered for this round.</p>
+      }
+
+      @if (error) { <p class="error">{{ error }}</p> }
+
+      <button class="btn-primary" type="submit" [disabled]="busy || draftHoles.length === 0">Save course</button>
+      <button class="btn-quiet" type="button" (click)="newRound()">Set up another round instead</button>
+    </form>
+  </div>
+</div>

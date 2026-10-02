@@ -1,0 +1,28 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell title="Leagues"></app-shell>
+
+    @if (leagues.length === 0) {
+      <p class="page-note">You don't organize a league yet.</p>
+    } @else {
+      <div class="card">
+        @for (league of leagues; track league.id) {
+          <a class="row" [routerLink]="['/admin/leagues', league.id]">
+            @if (league.logoImageUrl) {
+              <img class="avatar avatar-row" [src]="league.logoImageUrl" alt="" (error)="league.logoImageUrl = ''" />
+            }
+            <span class="row-body">
+              <span class="row-title">{{ league.name }}</span>
+              <span class="row-meta">{{ meta(league) }}</span>
+            </span>
+            <span class="chevron">&#8250;</span>
+          </a>
+        }
+      </div>
+    }
+
+    <button class="btn-primary" type="button" (click)="add()">Add league</button>
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

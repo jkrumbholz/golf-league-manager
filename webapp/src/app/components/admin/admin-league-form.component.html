@@ -1,0 +1,37 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="close" action="none" title="New league" [backTo]="['/admin/leagues']"></app-shell>
+
+    <form class="form" (ngSubmit)="save()">
+      <label class="field">
+        <span class="field-label">League name</span>
+        <input name="name" [(ngModel)]="name" placeholder="Thursday night league" />
+        @if (fieldErrors['name']) { <span class="field-error">{{ fieldErrors['name'] }}</span> }
+      </label>
+
+      <label class="field">
+        <span class="field-label">Description</span>
+        <textarea name="description" [(ngModel)]="description" placeholder="Optional"></textarea>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Season entry fee</span>
+        <input name="entryFee" type="number" inputmode="decimal" step="0.01" [(ngModel)]="entryFee" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Home course</span>
+        <select name="homeFacilityId" [(ngModel)]="homeFacilityId">
+          <option [ngValue]="null">No home course</option>
+          @for (facility of facilities; track facility.id) {
+            <option [ngValue]="facility.id">{{ facility.name }}</option>
+          }
+        </select>
+      </label>
+
+      @if (error) { <p class="error">{{ error }}</p> }
+
+      <button class="btn-primary" type="submit" [disabled]="saving">Create league</button>
+    </form>
+  </div>
+</div>

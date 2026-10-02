@@ -1,0 +1,64 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" [title]="leagueName" [backTo]="['/admin/leagues']"></app-shell>
+
+    <div class="photo-row">
+      @if (logoImageUrl && logoVisible) {
+        <img class="avatar avatar-logo" [src]="logoImageUrl" alt="" (error)="logoVisible = false" />
+      }
+      <label class="btn-secondary file-button">
+        {{ uploading ? 'Uploading' : 'League logo' }}
+        <input type="file" accept="image/jpeg,image/png,image/webp" [disabled]="uploading" (change)="onLogo($event)" />
+      </label>
+    </div>
+
+    <nav class="tabs">
+      <a class="tab" [class.tab-active]="tab === 'seasons'" [routerLink]="['/admin/leagues', leagueId]">Seasons</a>
+      <a class="tab" [class.tab-active]="tab === 'players'" [routerLink]="['/admin/leagues', leagueId]" [queryParams]="{ tab: 'players' }">Players</a>
+    </nav>
+
+    @if (tab === 'seasons') {
+      @if (seasons.length === 0) {
+        <p class="page-note">No seasons yet.</p>
+      } @else {
+        <div class="card">
+          @for (season of seasons; track season.id) {
+            <a class="row" [routerLink]="['/admin/seasons', season.id]"
+               [queryParams]="{ name: season.name, leagueId: leagueId }">
+              <span class="row-body">
+                <span class="row-title">{{ season.name }}</span>
+                <span class="row-meta">{{ dateRange(season) }} · {{ season.eventCount }} events</span>
+              </span>
+              @if (season.isActive) {
+                <span class="pill">Active</span>
+              } @else {
+                <span class="pill pill-muted">Ended</span>
+              }
+              <span class="chevron">&#8250;</span>
+            </a>
+          }
+        </div>
+      }
+    } @else {
+      @if (members.length === 0) {
+        <p class="page-note">No players yet.</p>
+      } @else {
+        <div class="card">
+          @for (member of members; track member.userId) {
+            <a class="row" [routerLink]="['/admin/leagues', leagueId, 'players', member.userId]">
+              <span class="row-body">
+                <span class="row-title">{{ member.displayName }}</span>
+                <span class="row-meta">{{ memberRole(member) }} · {{ member.handicapIndex }} index</span>
+              </span>
+              <span class="chevron">&#8250;</span>
+            </a>
+          }
+        </div>
+      }
+    }
+
+    <button class="btn-primary" type="button" (click)="add()">{{ tab === 'seasons' ? 'Add season' : 'Add player' }}</button>
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

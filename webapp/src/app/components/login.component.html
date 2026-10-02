@@ -1,0 +1,27 @@
+<div class="screen">
+  <div class="screen-inner">
+    <header class="topbar">
+      <span></span>
+      <h1 class="topbar-title">Sign in</h1>
+      <span></span>
+    </header>
+
+    <form class="form" (ngSubmit)="submit()">
+      <label class="field">
+        <span class="field-label">Username</span>
+        <input name="username" autocapitalize="none" autocomplete="username" [(ngModel)]="username" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Password</span>
+        <input name="password" type="password" autocomplete="current-password" [(ngModel)]="password" />
+      </label>
+
+      @if (error) { <p class="error">{{ error }}</p> }
+
+      <button class="btn-primary" type="submit">Sign in</button>
+    </form>
+
+    <p class="page-note">New here? <a class="text-link" routerLink="/register">Create an account</a></p>
+  </div>
+</div>

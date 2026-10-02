@@ -1,0 +1,46 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" title="Players" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      <p class="section-label">Tap a chip when you have the cash</p>
+
+      @if (dashboard.registrations.length === 0) {
+        <p class="page-note">Nobody has signed up yet.</p>
+      } @else {
+        <div class="card">
+          @for (player of dashboard.registrations; track player.userId) {
+            <div class="row row-static">
+              <span class="row-body">
+                <span class="row-title">{{ player.displayName }}</span>
+                <span class="row-meta">
+                  {{ player.handicapIndex }} index
+                  @if (staleIndex(player)) {
+                    · profile {{ player.profileHandicapIndex }}
+                  }
+                </span>
+              </span>
+              <span class="pay-chips">
+                <button class="pill" type="button" [class.pill-muted]="!player.paid" [disabled]="busy" (click)="togglePaid(player)">
+                  {{ player.paid ? 'Paid' : 'Owes' }}
+                </button>
+                @if (dashboard.event.ctpEnabled) {
+                  <button class="pill" type="button" [class.pill-muted]="!player.ctpPaid" [disabled]="busy" (click)="toggleCtp(player)">CTP</button>
+                }
+                @if (dashboard.event.longDriveEnabled) {
+                  <button class="pill" type="button" [class.pill-muted]="!player.longDrivePaid" [disabled]="busy" (click)="toggleLongDrive(player)">Long Drive</button>
+                }
+              </span>
+            </div>
+          }
+        </div>
+      }
+
+      <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="refreshIndexes()">Refresh indexes</button>
+      <p class="page-note">{{ notice || 'Pulls in the current profile index. A player who has posted a score keeps the index from this event.' }}</p>
+      <button class="btn-primary" type="button" (click)="add()">Add players</button>
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

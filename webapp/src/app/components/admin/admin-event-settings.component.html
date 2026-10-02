@@ -1,0 +1,47 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="close" action="none" title="Fees &amp; options" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      <form class="form" (ngSubmit)="save()">
+        <label class="field">
+          <span class="field-label">Event name</span>
+          <input name="name" [(ngModel)]="dashboard.event.name" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Entry fee</span>
+          <input name="entryFee" type="number" inputmode="decimal" step="0.01" [(ngModel)]="dashboard.event.entryFee" />
+        </label>
+
+        <p class="section-label">Side games</p>
+
+        <label class="field-check">
+          <input name="ctpEnabled" type="checkbox" [(ngModel)]="dashboard.event.ctpEnabled" />
+          <span>Closest to the pin</span>
+        </label>
+        @if (dashboard.event.ctpEnabled) {
+          <label class="field">
+            <span class="field-label">Closest to pin fee</span>
+            <input name="ctpEntryFee" type="number" inputmode="decimal" step="0.01" [(ngModel)]="dashboard.event.ctpEntryFee" />
+          </label>
+        }
+
+        <label class="field-check">
+          <input name="longDriveEnabled" type="checkbox" [(ngModel)]="dashboard.event.longDriveEnabled" />
+          <span>Long drive</span>
+        </label>
+        @if (dashboard.event.longDriveEnabled) {
+          <label class="field">
+            <span class="field-label">Long drive fee</span>
+            <input name="longDriveEntryFee" type="number" inputmode="decimal" step="0.01" [(ngModel)]="dashboard.event.longDriveEntryFee" />
+          </label>
+        }
+
+        @if (error) { <p class="error">{{ error }}</p> }
+
+        <button class="btn-primary" type="submit" [disabled]="busy">Save</button>
+      </form>
+    }
+  </div>
+</div>

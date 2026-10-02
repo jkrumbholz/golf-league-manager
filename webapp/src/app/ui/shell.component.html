@@ -1,0 +1,22 @@
+<header class="topbar" [class.topbar-wide]="action === 'add'">
+  @switch (nav) {
+    @case ('back') {
+      <a class="icon-button" [routerLink]="backTo" [queryParams]="queryParams" aria-label="Back">&#8249;</a>
+    }
+    @case ('close') {
+      <a class="icon-button" [routerLink]="backTo" [queryParams]="queryParams" aria-label="Close">&#10005;</a>
+    }
+    @default {
+      <span></span>
+    }
+  }
+
+  <h1 class="topbar-title">{{ title }}</h1>
+
+  <div class="topbar-actions">
+    @if (action === 'add') {
+      <button class="add-button" type="button" (click)="add.emit()">{{ addLabel }}</button>
+    }
+    <button class="icon-button" type="button" (click)="openMenu()" aria-label="Menu">&#9776;</button>
+  </div>
+</header>

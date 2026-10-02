@@ -1,0 +1,126 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" action="none" [title]="title" [backTo]="backTo"></app-shell>
+
+    @if (card) {
+      @if (card.canPickGroup) {
+        <label class="field field-inline">
+          <span class="field-label">Group</span>
+          <select name="groupId" [ngModel]="groupId" (ngModelChange)="changeGroup($event)">
+            @for (group of card.groups; track group.groupId) {
+              <option [ngValue]="group.groupId">{{ group.label }}</option>
+            }
+          </select>
+        </label>
+      } @else if (card.groupLabel) {
+        <p class="section-label">{{ card.groupLabel }}</p>
+      } @else if (card.teams.length > 1) {
+        <label class="field field-inline">
+          <span class="field-label">Team</span>
+          <select name="teamId" [ngModel]="teamId" (ngModelChange)="changeTeam($event)">
+            @for (team of card.teams; track team.teamId) {
+              <option [ngValue]="team.teamId">{{ team.name }}</option>
+            }
+          </select>
+        </label>
+      }
+
+      @if (card.notice) {
+        <p class="page-note">{{ card.notice }}</p>
+      }
+
+      @if (hole && hole.lines.length > 0) {
+        <a class="scorecard-link" href="" (click)="openScorecard($event)">Scorecard</a>
+
+        <section class="tee-card">
+          <p class="tee-label">Hole {{ hole.displayHoleNumber || hole.sequence }} of {{ card.holes.length }} &middot; par {{ hole.par }}</p>
+          @if (!showTeamTees(hole)) {
+            <p class="tee-name" [style.color]="hole.teeColor || 'var(--text)'">{{ hole.teeName || 'Selected tee' }}</p>
+            @if (card.runningTee) {
+              <p class="tee-label">Carried from the last hole. It stops at the front and back sets.</p>
+            }
+          }
+        </section>
+
+        @for (group of scoreGroups(hole); track group.key) {
+          @if (showTeamTees(hole)) {
+            <p class="team-tee" [style.color]="group.teeColor || 'var(--text)'">{{ group.teeName || 'Selected tee' }}</p>
+          }
+        @for (line of group.lines; track $index) {
+          <section class="player-card">
+            <p class="row-title">{{ line.displayName }}</p>
+            @if (card.oceans6 && line.userId) {
+              <div class="keep-tally">
+                @for (item of keepTally(line.userId); track item.par) {
+                  <div class="keep-stat" [class.keep-done]="item.kept >= item.need">
+                    <span class="keep-par">Par {{ item.par }}</span>
+                    <span class="keep-count">{{ item.kept }} of {{ item.need }} kept</span>
+                    <span class="keep-discard">{{ item.discarded }} discarded</span>
+                  </div>
+                }
+              </div>
+            }
+            <div class="stepper">
+              <button type="button" [disabled]="saving" (click)="bump(line, -1)">&minus;</button>
+              <div class="stepper-value" [class.stepper-unset]="line.gross == null">
+                @if (strokeDots(line).length > 0) {
+                  <span class="sc-dots">
+                    @for (dot of strokeDots(line); track dot) {
+                      <span class="sc-dot"></span>
+                    }
+                  </span>
+                }
+                {{ line.gross ?? '--' }}
+              </div>
+              <button type="button" [disabled]="saving" (click)="bump(line, 1)">+</button>
+            </div>
+            @if (card.oceans6 && line.userId) {
+              <div class="inline-actions">
+                <button class="btn-secondary" type="button" [class.chip-on]="line.kept === true"
+                        [disabled]="saving || decisionLocked(line) || line.kept === true || !canKeep(hole.par, line.userId)"
+                        (click)="setKept(line, true)">Keep</button>
+                <button class="btn-secondary" type="button" [class.chip-on]="line.kept === false"
+                        [disabled]="saving || decisionLocked(line) || line.kept === false || !canDiscard(hole.par, hole.sequence, line.userId)"
+                        (click)="setKept(line, false)">Discard</button>
+                @if (line.kept === true) { <span class="pill">Keeping</span> }
+                @if (line.kept === false) { <span class="pill pill-muted">Discarded</span> }
+                @if (decisionLocked(line)) {
+                  <p class="row-meta">Only a league organizer can change this.</p>
+                }
+                @if (mustKeep(hole, line)) {
+                  <p class="row-meta">You have to keep this par {{ hole.par }}.</p>
+                }
+                @if (cantKeep(hole, line)) {
+                  <p class="row-meta">You can't keep this par {{ hole.par }}.</p>
+                }
+              </div>
+            }
+          </section>
+        }
+          @if (group.score != null) {
+            <p class="section-label">Team score {{ group.score }}</p>
+          }
+        }
+
+        @if (hole.countingScore != null && !dirty && !hasVegasScore(hole)) {
+          <p class="section-label">Hole score {{ hole.countingScore }}</p>
+        }
+
+        <button class="btn-secondary clear-scores" type="button" [disabled]="saving || !hasScores || clearLocked" (click)="clearScores()">{{ clearLabel }}</button>
+        <button class="btn-secondary clear-scores" type="button" [disabled]="saving || !dirty" (click)="cancel()">Cancel</button>
+
+        <div class="hole-nav">
+          <button class="btn-secondary" type="button" [disabled]="saving || holeIndex === 0" (click)="previous()">Previous</button>
+          <button class="btn-primary btn-inline" type="button" [disabled]="saving || needsDecision || (onLastHole && !dirty)" (click)="next()">{{ nextLabel }}</button>
+        </div>
+        @if (needsDecision) {
+          <p class="page-note">Keep or discard each score before the next hole.</p>
+        }
+      } @else if (card.holes.length === 0 && !card.notice) {
+        <p class="page-note">This round has no holes yet. The organizer needs to save the course first.</p>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

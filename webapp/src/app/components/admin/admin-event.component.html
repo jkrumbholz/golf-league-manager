@@ -1,0 +1,83 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" action="menu" [title]="dashboard?.event?.name || 'Event'" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      <p class="section-label">{{ meta() }}</p>
+
+      <div class="card">
+        <a class="row" [routerLink]="['/admin/events', eventId, 'course']">
+          <span class="row-body">
+            <span class="row-title">Course</span>
+            <span class="row-meta">{{ courseSummary() }}</span>
+          </span>
+          <span class="chevron">&#8250;</span>
+        </a>
+
+        <a class="row" [routerLink]="['/admin/events', eventId, 'players']">
+          <span class="row-body">
+            <span class="row-title">Players &amp; payments</span>
+            <span class="row-meta">{{ playerSummary() }}</span>
+          </span>
+          <span class="chevron">&#8250;</span>
+        </a>
+
+        @if (teamFormat) {
+          <a class="row" [routerLink]="['/admin/events', eventId, 'teams']">
+            <span class="row-body">
+              <span class="row-title">Teams</span>
+              <span class="row-meta">{{ dashboard.teams.length }} teams</span>
+            </span>
+            <span class="chevron">&#8250;</span>
+          </a>
+        }
+
+        <a class="row" [routerLink]="['/admin/events', eventId, 'groups']">
+          <span class="row-body">
+            <span class="row-title">Groups &amp; tee times</span>
+            <span class="row-meta">{{ groupSummary() }}</span>
+          </span>
+          <span class="chevron">&#8250;</span>
+        </a>
+
+        @if (sideGames) {
+          <a class="row" [routerLink]="['/admin/events', eventId, 'side-games']">
+            <span class="row-body">
+              <span class="row-title">Side games</span>
+              <span class="row-meta">Record the winners</span>
+            </span>
+            <span class="chevron">&#8250;</span>
+          </a>
+        }
+
+        <a class="row" [routerLink]="['/admin/events', eventId, 'payouts']">
+          <span class="row-body">
+            <span class="row-title">Payouts</span>
+            <span class="row-meta">{{ dashboard.payouts.length }} recorded</span>
+          </span>
+          <span class="chevron">&#8250;</span>
+        </a>
+
+        <a class="row" [routerLink]="['/admin/events', eventId, 'settings']">
+          <span class="row-body">
+            <span class="row-title">Fees &amp; options</span>
+            <span class="row-meta">Entry {{ dashboard.event.entryFee }}</span>
+          </span>
+          <span class="chevron">&#8250;</span>
+        </a>
+
+        <a class="row" [routerLink]="['/admin/events', eventId, 'share']">
+          <span class="row-body">
+            <span class="row-title">Signup link</span>
+            <span class="row-meta">Share with individuals</span>
+          </span>
+          <span class="chevron">&#8250;</span>
+        </a>
+      </div>
+
+      <a class="btn-primary" [routerLink]="['/events', eventId]">View leaderboard</a>
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

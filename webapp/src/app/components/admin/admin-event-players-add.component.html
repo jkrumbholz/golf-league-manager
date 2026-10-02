@@ -1,0 +1,30 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="close" action="none" title="Add players" [backTo]="['/admin/events', eventId, 'players']"></app-shell>
+
+    @if (dashboard) {
+      @if (available.length === 0) {
+        <p class="page-note">Every league player is already in this event.</p>
+      } @else {
+        <p class="section-label">League players</p>
+        <div class="card">
+          @for (player of available; track player.userId) {
+            <button class="row" type="button" (click)="toggle(player.userId)">
+              <span class="row-body">
+                <span class="row-title">{{ player.displayName }}</span>
+                <span class="row-meta">{{ player.handicapIndex }} index</span>
+              </span>
+              <span class="check" [class.check-on]="isSelected(player.userId)">&#10003;</span>
+            </button>
+          }
+        </div>
+
+        <button class="btn-primary" type="button" [disabled]="busy || selected.length === 0" (click)="save()">
+          Add {{ selected.length }} player{{ selected.length === 1 ? '' : 's' }}
+        </button>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

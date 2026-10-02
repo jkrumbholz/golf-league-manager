@@ -1,0 +1,75 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="close" action="none" title="Add player" [backTo]="backTo"></app-shell>
+
+    <nav class="tabs">
+      <button class="tab" type="button" [class.tab-active]="mode === 'search'" (click)="mode = 'search'">Existing</button>
+      <button class="tab" type="button" [class.tab-active]="mode === 'create'" (click)="mode = 'create'">Brand new</button>
+    </nav>
+
+    @if (mode === 'search') {
+      <form class="form" (ngSubmit)="search()">
+        <label class="field">
+          <span class="field-label">Name or username</span>
+          <input name="query" [(ngModel)]="query" placeholder="Start typing a name" />
+        </label>
+        <button class="btn-primary" type="submit">Search</button>
+      </form>
+
+      @if (matches.length > 0) {
+        <div class="card">
+          @for (match of matches; track match.userId) {
+            <div class="row row-static">
+              <span class="row-body">
+                <span class="row-title">{{ match.displayName }}</span>
+                <span class="row-meta">{{ match.username }} · {{ match.handicapIndex }} index</span>
+              </span>
+              <button class="add-button" type="button" (click)="addExisting(match.userId)">Add</button>
+            </div>
+          }
+        </div>
+      } @else if (searched) {
+        <p class="page-note">No accounts matched. Switch to Brand new to create one.</p>
+      }
+    } @else {
+      <form class="form" (ngSubmit)="createPlayer()">
+        <label class="field">
+          <span class="field-label">First name</span>
+          <input name="firstName" [(ngModel)]="firstName" />
+          @if (fieldErrors['firstName']) { <span class="field-error">{{ fieldErrors['firstName'] }}</span> }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Last name</span>
+          <input name="lastName" [(ngModel)]="lastName" />
+          @if (fieldErrors['lastName']) { <span class="field-error">{{ fieldErrors['lastName'] }}</span> }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Username</span>
+          <input name="username" autocapitalize="none" [(ngModel)]="username" />
+          @if (fieldErrors['username']) { <span class="field-error">{{ fieldErrors['username'] }}</span> }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Starter password</span>
+          <input name="password" type="text" [(ngModel)]="password" />
+          @if (fieldErrors['password']) {
+            <span class="field-error">{{ fieldErrors['password'] }}</span>
+          } @else {
+            <span class="field-hint">Share this with them so they can sign in and change it.</span>
+          }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Handicap index</span>
+          <input name="handicapIndex" type="number" inputmode="decimal" step="0.1" [(ngModel)]="handicapIndex" />
+        </label>
+
+        <button class="btn-primary" type="submit" [disabled]="saving">Create player</button>
+      </form>
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

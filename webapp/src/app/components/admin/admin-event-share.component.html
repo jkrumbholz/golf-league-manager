@@ -1,0 +1,33 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" action="none" title="Share" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      <p class="section-label">Signup link</p>
+      <div class="card">
+        <div class="row row-static">
+          <span class="row-body">
+            <span class="row-meta">Anyone with this link can sign themselves up</span>
+            <span class="link-text">{{ signupUrl }}</span>
+          </span>
+        </div>
+      </div>
+      <button class="btn-primary" type="button" (click)="copy(signupUrl)">Copy signup link</button>
+
+      <p class="section-label">Leaderboard for a screen</p>
+      <div class="card">
+        <div class="row row-static">
+          <span class="row-body">
+            <span class="row-meta">Open this on a TV at the clubhouse</span>
+            <span class="link-text">{{ boardUrl }}</span>
+          </span>
+        </div>
+      </div>
+      <button class="btn-secondary btn-wide" type="button" (click)="copy(boardUrl)">Copy leaderboard link</button>
+
+      @if (copied) { <p class="page-note">Copied.</p> }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

@@ -1,0 +1,45 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" title="Payouts" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      <p class="section-label">Pot {{ pot }} · paid out {{ paidOut }} · left {{ pot - paidOut }}</p>
+
+      @if (dashboard.payouts.length === 0) {
+        <p class="page-note">No payouts recorded.</p>
+      } @else {
+        <div class="card">
+          @for (payout of dashboard.payouts; track payout.id) {
+            <div class="row row-static">
+              <a class="row-body" [routerLink]="['/admin/events', eventId, 'payouts', payout.id]">
+                <span class="row-title">{{ label(payout) }}</span>
+                <span class="row-meta">{{ winner(payout) }} · {{ money(payout.amount) }}</span>
+              </a>
+              <button class="btn-quiet btn-danger" type="button" [disabled]="busy" (click)="remove(payout.id)">Remove</button>
+            </div>
+          }
+        </div>
+      }
+
+      <button class="btn-primary" type="button" (click)="add()">Add payout</button>
+
+      @if (suggestions.length > 0) {
+        <p class="section-label">Suggested from a {{ money(placePot) }} pot</p>
+        <div class="card">
+          @for (item of suggestions; track item.place) {
+            <button class="row" type="button" (click)="useSuggestion(item)">
+              <span class="row-body">
+                <span class="row-title">{{ placeName(item.place) }}</span>
+                <span class="row-meta">{{ money(item.amount) }}</span>
+              </span>
+              <span class="chevron">&#8250;</span>
+            </button>
+          }
+        </div>
+        <p class="page-note">{{ suggestionNote }}</p>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

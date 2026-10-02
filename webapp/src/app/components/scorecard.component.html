@@ -1,0 +1,62 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" action="menu" title="Scorecard" [backTo]="backTo"></app-shell>
+
+    @if (card) {
+      <p class="section-label">{{ card.competitorName || card.eventName }} · {{ card.formatLabel }}</p>
+
+      @if (card.notice) {
+        <p class="page-note">{{ card.notice }}</p>
+      }
+      @if (card.holes.length === 0 && !card.notice) {
+        <p class="page-note">This round has no holes yet.</p>
+      } @else if (card.holes.length > 0) {
+        <div class="card sc" [style.grid-template-columns]="columnsStyle">
+          <div class="sc-head">#</div>
+          <div class="sc-head">Par</div>
+          @for (column of columns; track column.key) {
+            <div class="sc-head">{{ column.name }}</div>
+          }
+
+          @for (hole of card.holes; track hole.sequence; let index = $index) {
+            <a class="sc-cell" [routerLink]="['/events', eventId, 'score', roundId]" [queryParams]="holeParams(index)">{{ holeNumber(hole) }}</a>
+            <a class="sc-cell sc-muted" [routerLink]="['/events', eventId, 'score', roundId]" [queryParams]="holeParams(index)">{{ hole.par }}</a>
+            @for (column of columns; track column.key) {
+              <a class="sc-cell" [routerLink]="['/events', eventId, 'score', roundId]" [queryParams]="holeParams(index)"
+                 [class.sc-empty]="line(hole, column.key)?.gross == null"
+                 [class.sc-out]="discarded(hole, column.key)">
+                @if (strokeDots(hole, column.key).length > 0) {
+                  <span class="sc-dots">
+                    @for (dot of strokeDots(hole, column.key); track dot) {
+                      <span class="sc-dot"></span>
+                    }
+                  </span>
+                }
+                <span class="sc-gross" [class.sc-under]="relation(hole, column.key) === 'under'" [class.sc-over]="relation(hole, column.key) === 'over'">{{ line(hole, column.key)?.gross ?? '–' }}</span>
+                @if (discarded(hole, column.key)) {
+                  <span class="sc-out-label">Out</span>
+                } @else if (showsNet(hole, column.key)) {
+                  <span class="sc-net">{{ line(hole, column.key)?.net }}</span>
+                }
+              </a>
+            }
+          }
+
+          <div class="sc-cell sc-total">Tot</div>
+          <div class="sc-cell sc-total"></div>
+          @for (column of columns; track column.key) {
+            <div class="sc-cell sc-total">
+              <span>{{ total(column.key) ?? '–' }}</span>
+              @if (netTotal(column.key) != null) {
+                <span class="sc-net">{{ netTotal(column.key) }}</span>
+              }
+            </div>
+          }
+        </div>
+        <p class="page-note">Tap a hole to change a score. A circle is under par and a square is over par. Dots in the corner are strokes on that hole. Out is a discarded score and is not in the total. A small number is the net after strokes.</p>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

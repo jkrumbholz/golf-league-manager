@@ -1,0 +1,71 @@
+<div class="screen">
+  <div class="screen-inner">
+    @if (broadcast) {
+      <header class="topbar">
+        <span></span>
+        <h1 class="topbar-title">{{ headline() }}</h1>
+        <span></span>
+      </header>
+    } @else {
+      <app-shell nav="back" action="menu" [title]="headline()" [backTo]="backTo()"></app-shell>
+    }
+
+    @if (board) {
+      <p class="section-label">{{ subtitle() }}</p>
+
+      @if (board.rows.length === 0) {
+        <p class="page-note">No scores yet.</p>
+      } @else {
+        <div class="card">
+          @for (row of board.rows; track row.competitorId) {
+            <div class="lb-item">
+              <button type="button" class="lb-row" [class.row-highlight]="isMe(row)" [class.lb-expandable]="hasKeeps(row)" [attr.aria-expanded]="hasKeeps(row) ? isOpen(row) : null" (click)="toggle(row)">
+                <span class="lb-rank">{{ row.rank }}</span>
+                <span class="lb-name">
+                  {{ row.name }}
+                  @if (board.usesRunningTee && row.currentTeeName) {
+                    <span class="lb-tee">{{ row.currentTeeName }}</span>
+                  }
+                </span>
+                <span class="lb-topar" [class.lb-ns]="noScore(row)">{{ scoreLabel(row) }}</span>
+                <span class="lb-hole" [class.lb-time]="row.lastHole == null && !!row.teeTime" [class.lb-warn]="missingTeeTime(row)">{{ holeLabel(row) }}</span>
+              </button>
+              @if (isOpen(row) && row.keeps) {
+                <div class="lb-keeps">
+                  @for (item of row.keeps; track item.par) {
+                    <div class="keep-stat" [class.keep-done]="item.kept >= item.need">
+                      <span class="keep-par">Par {{ item.par }}</span>
+                      <span class="keep-count">{{ item.kept }} of {{ item.need }} kept</span>
+                      <span class="keep-discard">{{ item.discarded }} discarded</span>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      @if (sideGames.length > 0) {
+        <p class="section-label">Side games</p>
+        <div class="card">
+          @for (game of sideGames; track game.label) {
+            <div class="row row-static">
+              <span class="row-body">
+                <span class="row-title">{{ game.name }}</span>
+                <span class="row-meta">{{ game.label }}</span>
+              </span>
+            </div>
+          }
+        </div>
+      }
+
+      @if (!broadcast && board.firstRoundId) {
+        <a class="btn-primary" [routerLink]="['/events', eventId, 'score', board.firstRoundId]">Enter my score</a>
+        <a class="btn-secondary btn-block" [routerLink]="['/events', eventId, 'score', board.firstRoundId, 'card']">Scorecard</a>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>
