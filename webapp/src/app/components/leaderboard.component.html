@@ -19,7 +19,7 @@
         <div class="card">
           @for (row of board.rows; track row.competitorId) {
             <div class="lb-item">
-              <button type="button" class="lb-row" [class.row-highlight]="isMe(row)" [class.lb-expandable]="hasKeeps(row)" [attr.aria-expanded]="hasKeeps(row) ? isOpen(row) : null" (click)="toggle(row)">
+              <button type="button" class="lb-row lb-expandable" [class.row-highlight]="isMe(row)" [attr.aria-expanded]="isOpen(row)" (click)="toggle(row)">
                 <span class="lb-rank">{{ row.rank }}</span>
                 <span class="lb-name">
                   {{ row.name }}
@@ -30,13 +30,109 @@
                 <span class="lb-topar" [class.lb-ns]="noScore(row)">{{ scoreLabel(row) }}</span>
                 <span class="lb-hole" [class.lb-time]="row.lastHole == null && !!row.teeTime" [class.lb-warn]="missingTeeTime(row)">{{ holeLabel(row) }}</span>
               </button>
-              @if (isOpen(row) && row.keeps) {
-                <div class="lb-keeps">
-                  @for (item of row.keeps; track item.par) {
-                    <div class="keep-stat" [class.keep-done]="item.kept >= item.need">
-                      <span class="keep-par">Par {{ item.par }}</span>
-                      <span class="keep-count">{{ item.kept }} of {{ item.need }} kept</span>
-                      <span class="keep-discard">{{ item.discarded }} discarded</span>
+              @if (isOpen(row)) {
+                <div class="lb-detail">
+                  <p class="lb-detail-name">{{ row.detailName || row.name }}</p>
+                  @if (row.keeps) {
+                    <div class="lb-keeps">
+                      @for (item of row.keeps; track item.par) {
+                        <div class="keep-stat" [class.keep-done]="item.kept >= item.need">
+                          <span class="keep-par">Par {{ item.par }}</span>
+                          <span class="keep-count">{{ item.kept }} of {{ item.need }} kept</span>
+                          <span class="keep-discard">{{ item.discarded }} discarded</span>
+                        </div>
+                      }
+                    </div>
+                  }
+                  @if (playedHoles(row).length === 0) {
+                    <p class="lb-card-empty">No holes yet.</p>
+                  } @else {
+                    <div class="lb-card">
+                      @if (teamCard(row)) {
+                        <div class="lb-card-row lb-card-team lb-card-head" [ngClass]="playerCountClass(row)">
+                          <span></span>
+                          <span></span>
+                          @for (player of cardPlayers(row); track player.name) {
+                            <span class="lb-player-cell">
+                              <span></span>
+                              <span class="lb-card-player">{{ player.name }}</span>
+                              <span></span>
+                            </span>
+                          }
+                          <span class="lb-card-player lb-team-label">Team</span>
+                        </div>
+                      }
+                      @for (hole of playedHoles(row); track hole.sequence) {
+                        @if (teamCard(row)) {
+                          <div class="lb-card-row lb-card-team" [ngClass]="playerCountClass(row)">
+                            <span class="lb-card-hole">{{ hole.hole }}</span>
+                            <span class="lb-card-meta">Par {{ hole.par }}</span>
+                            @for (player of hole.players ?? []; track player.name) {
+                              <span class="lb-player-cell">
+                                <span class="lb-card-marks">
+                                  @if (player.strokes > 0) {
+                                    @for (dot of strokeDots(player.strokes); track dot) {
+                                      <span class="sc-dot"></span>
+                                    }
+                                  }
+                                  @if (player.strokes < 0) {
+                                    <span class="lb-card-give">{{ givenMarks(player.strokes) }}</span>
+                                  }
+                                </span>
+                                <span class="lb-player-gross">{{ player.gross ?? '–' }}</span>
+                                <span class="lb-card-net">{{ player.gross != null && player.net != null && player.net !== player.gross ? player.net : '' }}</span>
+                              </span>
+                            }
+                            <span class="lb-team-score">{{ hole.gross ?? '–' }}</span>
+                          </div>
+                        } @else {
+                          <div class="lb-card-row">
+                            <span class="lb-card-hole">
+                              <span>{{ hole.hole }}</span>
+                              @if (hole.strokes > 0) {
+                                <span class="lb-card-marks">
+                                  @for (dot of strokeDots(hole.strokes); track dot) {
+                                    <span class="sc-dot"></span>
+                                  }
+                                </span>
+                              }
+                              @if (hole.strokes < 0) {
+                                <span class="lb-card-give">{{ givenMarks(hole.strokes) }}</span>
+                              }
+                            </span>
+                            <span class="lb-card-meta">Par {{ hole.par }}</span>
+                            <span class="lb-card-score">
+                              {{ hole.kept === false ? 'Out' : hole.gross }}
+                              @if (hole.kept !== false && hole.net != null) {
+                                <span class="lb-card-net">{{ hole.net }}</span>
+                              }
+                            </span>
+                          </div>
+                        }
+                      }
+                      @if (teamCard(row)) {
+                        <div class="lb-card-row lb-card-team lb-card-total" [ngClass]="playerCountClass(row)">
+                          <span class="lb-card-hole">Tot</span>
+                          <span></span>
+                          @for (player of cardPlayers(row); track player.name; let index = $index) {
+                            <span class="lb-player-cell">
+                              <span></span>
+                              <span class="lb-player-gross">{{ playerGrossTotal(row, index) }}</span>
+                              <span class="lb-card-net">{{ playerNetTotal(row, index) !== playerGrossTotal(row, index) ? playerNetTotal(row, index) : '' }}</span>
+                            </span>
+                          }
+                          <span class="lb-team-score">{{ teamTotal(row) }}</span>
+                        </div>
+                      } @else {
+                        <div class="lb-card-row lb-card-total">
+                          <span class="lb-card-hole">Tot</span>
+                          <span></span>
+                          <span class="lb-card-score">
+                            {{ grossTotal(row) }}
+                            <span class="lb-card-net">{{ netTotal(row) }}</span>
+                          </span>
+                        </div>
+                      }
                     </div>
                   }
                 </div>

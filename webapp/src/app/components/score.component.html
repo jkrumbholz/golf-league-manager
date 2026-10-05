@@ -33,7 +33,7 @@
         <a class="scorecard-link" href="" (click)="openScorecard($event)">Scorecard</a>
 
         <section class="tee-card">
-          <p class="tee-label">Hole {{ hole.displayHoleNumber || hole.sequence }} of {{ card.holes.length }} &middot; par {{ hole.par }}</p>
+          <p class="hole-now">Hole {{ courseHole(hole) }} - Par {{ hole.par }}</p>
           @if (!showTeamTees(hole)) {
             <p class="tee-name" [style.color]="hole.teeColor || 'var(--text)'">{{ hole.teeName || 'Selected tee' }}</p>
             @if (card.runningTee) {
@@ -110,7 +110,7 @@
         <button class="btn-secondary clear-scores" type="button" [disabled]="saving || !dirty" (click)="cancel()">Cancel</button>
 
         <div class="hole-nav">
-          <button class="btn-secondary" type="button" [disabled]="saving || holeIndex === 0" (click)="previous()">Previous</button>
+          <button class="btn-secondary" type="button" [disabled]="saving || onFirstHole" (click)="previous()">Previous</button>
           <button class="btn-primary btn-inline" type="button" [disabled]="saving || needsDecision || (onLastHole && !dirty)" (click)="next()">{{ nextLabel }}</button>
         </div>
         @if (needsDecision) {

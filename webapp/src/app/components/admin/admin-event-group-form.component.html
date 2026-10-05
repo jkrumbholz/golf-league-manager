@@ -7,7 +7,14 @@
         <span class="field-label">Tee time</span>
         <input name="teeTime" type="time" [(ngModel)]="teeTime" />
         @if (fieldErrors['teeTime']) { <span class="field-error">{{ fieldErrors['teeTime'] }}</span> }
-        <span class="field-hint">When this foursome tees off.</span>
+        <span class="field-hint">When this group tees off. Other groups can use the same time if they start on a different hole.</span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Starting hole</span>
+        <input name="startingHole" type="number" inputmode="numeric" min="1" max="36" [(ngModel)]="startingHole" />
+        @if (fieldErrors['startingHole']) { <span class="field-error">{{ fieldErrors['startingHole'] }}</span> }
+        <span class="field-hint">Score entry opens on this hole.</span>
       </label>
 
       <button class="btn-primary" type="submit" [disabled]="busy">Save group</button>

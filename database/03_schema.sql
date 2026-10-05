@@ -202,17 +202,22 @@ CREATE TABLE payout (
 
 CREATE INDEX payout_event_id_idx ON payout(event_id);
 
--- One row is one tee time. A foursome is at most 4 players: one 4-player team,
+-- One row is one group. A foursome is at most 4 players: one 4-player team,
 -- two 2-player teams, or up to four individuals. Threesomes leave a spot empty.
+-- Several groups may share a tee time when they start on different holes.
 -- The application enforces the 4-player cap.
 CREATE TABLE tee_group (
-    id          SERIAL PRIMARY KEY,
-    event_id    INTEGER NOT NULL REFERENCES event(id) ON DELETE CASCADE,
-    tee_time    TIME NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id             SERIAL PRIMARY KEY,
+    event_id       INTEGER NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+    tee_time       TIME NOT NULL,
+    starting_hole  INTEGER NOT NULL DEFAULT 1,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX tee_group_event_id_idx ON tee_group(event_id);
+
+CREATE UNIQUE INDEX tee_group_event_time_hole_idx
+    ON tee_group (event_id, tee_time, starting_hole);
 
 CREATE TABLE tee_group_member (
     id            SERIAL PRIMARY KEY,

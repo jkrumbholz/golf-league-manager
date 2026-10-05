@@ -139,6 +139,29 @@ export interface LeaderboardRow {
   currentTeeName: string | null;
   /** Kept and discarded counts for a keep/discard format. Null for every other format. */
   keeps: KeepProgress[] | null;
+  /** Every hole on the card, in course order. The leaderboard reorders this from the starting hole. */
+  card?: ScorecardHole[];
+}
+
+export interface ScorecardPlayer {
+  name: string;
+  gross: number | null;
+  net: number | null;
+  /** Positive when the player receives a stroke. Negative when they give one. */
+  strokes: number;
+}
+
+export interface ScorecardHole {
+  sequence: number;
+  hole: number;
+  par: number;
+  gross: number | null;
+  net: number | null;
+  /** Positive when the player receives a stroke. Negative when they give one. */
+  strokes: number;
+  kept: boolean | null;
+  /** One entry per player on a team card. Empty when the hole is a single score. */
+  players: ScorecardPlayer[];
 }
 
 export function defaultDisplayName(firstName: string, lastName: string): string {
@@ -162,7 +185,9 @@ export function strokeAllocation(playingHandicap: number, holes: HoleSetup[]): M
   const count = holes.length;
   if (count === 0) return allocation;
 
-  const handicap = Math.max(0, Math.round(playingHandicap));
+  const rounded = Math.round(playingHandicap);
+  const giving = rounded < 0;
+  const handicap = Math.abs(rounded);
   const base = Math.floor(handicap / count);
   const extra = handicap % count;
   const ranked = [...holes].sort((a, b) => {
@@ -171,9 +196,11 @@ export function strokeAllocation(playingHandicap: number, holes: HoleSetup[]): M
     if (aIndex !== bIndex) return aIndex - bIndex;
     return a.sequence - b.sequence;
   });
+  if (giving) ranked.reverse();
 
   ranked.forEach((hole, index) => {
-    allocation.set(hole.sequence, base + (index < extra ? 1 : 0));
+    const amount = base + (index < extra ? 1 : 0);
+    allocation.set(hole.sequence, giving && amount ? -amount : amount);
   });
   return allocation;
 }
@@ -312,6 +339,7 @@ export function combineRounds(rounds: CompetitorTotal[][], format?: EventFormat)
       const lastHole = lastCompletedHole(competitor.holes);
       const finished = cardFinished(competitor.holes);
       const keeps = quota ? summarizeKeeps(competitor.holes, quota) : null;
+      const card = scorecardHoles(competitor.holes);
       if (!existing) {
         byId.set(competitor.id, {
           rank: 0,
@@ -325,6 +353,7 @@ export function combineRounds(rounds: CompetitorTotal[][], format?: EventFormat)
           finished,
           currentTeeName: competitor.currentTeeName,
           keeps,
+          card,
         });
         return;
       }
@@ -332,6 +361,7 @@ export function combineRounds(rounds: CompetitorTotal[][], format?: EventFormat)
       existing.thru += competitor.thru;
       existing.finished = existing.finished && finished;
       if (lastHole != null) existing.lastHole = lastHole;
+      if (card.some(hole => hole.gross != null)) existing.card = card;
       existing.currentTeeName = competitor.currentTeeName ?? existing.currentTeeName;
       if (existing.keeps && keeps) existing.keeps = addKeeps(existing.keeps, keeps);
       if (competitor.total === null) return;
@@ -347,8 +377,8 @@ export function combineRounds(rounds: CompetitorTotal[][], format?: EventFormat)
   return orderLeaderboard([...byId.values()]);
 }
 
-/** Players with a score stay on top. Everyone else is in tee-time order, and a missing tee time is last. */
-export function orderLeaderboard<T extends LeaderboardRow & { teeTimeSort?: string | null }>(rows: T[]): T[] {
+/** Players with a score stay on top. Everyone else is in tee-time order, then starting hole. A missing tee time is last. */
+export function orderLeaderboard<T extends LeaderboardRow & { teeTimeSort?: string | null; startingHole?: number | null }>(rows: T[]): T[] {
   const ordered = [...rows].sort((a, b) => {
     const aScore = standing(a);
     const bScore = standing(b);
@@ -362,6 +392,9 @@ export function orderLeaderboard<T extends LeaderboardRow & { teeTimeSort?: stri
     if (!aTee) return 1;
     if (!bTee) return -1;
     if (aTee !== bTee) return aTee < bTee ? -1 : 1;
+    const aHole = a.startingHole ?? 0;
+    const bHole = b.startingHole ?? 0;
+    if (aHole !== bHole) return aHole - bHole;
     return a.name.localeCompare(b.name);
   });
 
@@ -643,10 +676,49 @@ function cardFinished(holes: HoleView[]): boolean {
 }
 
 function lastCompletedHole(holes: HoleView[]): number | null {
+  return latestPlayedHole(scorecardHoles(holes), null);
+}
+
+export function courseHoleNumber(hole: { displayHoleNumber: number | null; sequence: number }): number {
+  return hole.displayHoleNumber ?? hole.sequence;
+}
+
+export function scorecardHoles(holes: HoleView[]): ScorecardHole[] {
+  return holes.map(hole => {
+    const single = hole.lines.length <= 1;
+    const line = hole.lines[0];
+    return {
+      sequence: hole.sequence,
+      hole: courseHoleNumber(hole),
+      par: hole.par,
+      gross: single ? (line?.gross ?? null) : hole.countingScore,
+      net: single ? (line?.net ?? null) : null,
+      strokes: single ? (line?.strokes ?? 0) : 0,
+      kept: single ? (line?.kept ?? null) : null,
+      players: single ? [] : hole.lines.map(item => ({
+        name: item.displayName,
+        gross: item.gross,
+        net: item.net,
+        strokes: item.strokes,
+      })),
+    };
+  });
+}
+
+/** Course order, rotated so the group's starting hole is first. */
+export function orderFromStartingHole<T extends { hole: number }>(holes: T[], startingHole: number | null): T[] {
+  if (startingHole == null) return holes;
+  const start = holes.findIndex(hole => hole.hole === startingHole);
+  if (start <= 0) return holes;
+  return [...holes.slice(start), ...holes.slice(0, start)];
+}
+
+/** Last course hole with a score, walking from the starting hole and wrapping. */
+export function latestPlayedHole(holes: ScorecardHole[], startingHole: number | null): number | null {
   let last: number | null = null;
-  for (const hole of holes) {
-    if (!hole.complete) continue;
-    last = hole.displayHoleNumber ?? hole.sequence;
+  for (const hole of orderFromStartingHole(holes, startingHole)) {
+    if (hole.gross == null) continue;
+    last = hole.hole;
   }
   return last;
 }

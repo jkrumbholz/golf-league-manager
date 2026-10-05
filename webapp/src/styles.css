@@ -614,12 +614,109 @@ button.lb-row.lb-expandable { cursor: pointer; }
   padding: 18px 16px;
 }
 
+.lb-detail { padding: 0 16px 14px; }
+
+.lb-detail-name {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
 .lb-keeps {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  padding: 0 16px 16px;
+  margin-bottom: 10px;
 }
+
+.lb-card { display: flex; flex-direction: column; gap: 4px; }
+
+.lb-card-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.lb-card-team { gap: 8px; }
+.lb-card-team.players-2 { grid-template-columns: 2.4em 46px minmax(0, 1fr) minmax(0, 1fr) 3.2em; }
+.lb-card-team.players-3 { grid-template-columns: 2.4em 46px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 3.2em; }
+.lb-card-team.players-4 { grid-template-columns: 2.4em 46px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 3.2em; }
+
+.lb-card-head {
+  background: transparent;
+  padding: 0 10px 2px;
+}
+
+.lb-player-cell {
+  display: grid;
+  grid-template-columns: 14px 2.5em 2.2em;
+  align-items: center;
+  justify-content: end;
+  column-gap: 4px;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-player-gross { text-align: right; }
+
+.lb-player-cell .lb-card-marks {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.lb-player-cell .lb-card-net {
+  margin-left: 4px;
+  text-align: left;
+}
+
+.lb-team-score,
+.lb-team-label {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.lb-team-score { font-size: 18px; font-weight: 800; }
+
+.lb-card-player {
+  overflow: visible;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.lb-card-hole {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 800;
+}
+.lb-card-meta { color: var(--text-muted); font-size: 13px; font-weight: 700; }
+.lb-card-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 18px;
+  font-weight: 800;
+}
+.lb-card-marks { display: inline-flex; gap: 3px; }
+.lb-card-give { color: var(--accent); font-size: 16px; letter-spacing: 0.04em; }
+.lb-card-net { color: var(--text-muted); font-size: 13px; font-weight: 700; }
+.lb-card-total { background: transparent; padding-top: 4px; }
+.lb-card-empty { margin: 0; color: var(--text-muted); font-size: 14px; font-weight: 700; }
 
 .lb-rank { color: var(--text-faint); font-size: 15px; font-weight: 700; }
 
@@ -763,6 +860,16 @@ a.sc-cell.sc-out .sc-gross { text-decoration: line-through; }
   padding: 18px;
   border-radius: var(--radius-card);
   background: linear-gradient(135deg, var(--surface-from), var(--surface-to));
+}
+
+.hole-now {
+  margin: 0 0 8px;
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.05;
+  color: #ffffff;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .tee-label {

@@ -13,6 +13,7 @@ import { AdminEventScreen } from './admin-event-screen';
 export class AdminEventGroupFormComponent extends AdminEventScreen {
   private router = inject(Router);
   teeTime = '';
+  startingHole: number | null = 1;
   fieldErrors: Record<string, string> = {};
 
   override get backTo(): unknown[] {
@@ -22,12 +23,19 @@ export class AdminEventGroupFormComponent extends AdminEventScreen {
   async save(): Promise<void> {
     this.fieldErrors = {};
     if (!this.teeTime) this.fieldErrors['teeTime'] = 'Enter a tee time';
+    const startingHole = Number(this.startingHole);
+    if (!Number.isInteger(startingHole) || startingHole < 1) this.fieldErrors['startingHole'] = 'Enter a starting hole';
     if (Object.keys(this.fieldErrors).length > 0) return;
 
     this.error = '';
     this.busy = true;
     try {
-      await this.api.put('group', { action: 'create', eventId: this.eventId, teeTime: this.teeTime });
+      await this.api.put('group', {
+        action: 'create',
+        eventId: this.eventId,
+        teeTime: this.teeTime,
+        startingHole,
+      });
       await this.router.navigate(this.backTo);
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Could not save the tee time';

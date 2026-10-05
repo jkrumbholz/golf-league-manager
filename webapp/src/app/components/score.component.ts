@@ -50,6 +50,7 @@ interface Scorecard {
   canPickGroup: boolean;
   groupId: number | null;
   groupLabel: string | null;
+  startingHole: number | null;
   notice: string | null;
 }
 
@@ -86,7 +87,12 @@ export class ScoreComponent implements OnInit {
     if (explicit) this.holeIndex = requestedHole;
     else this.holeIndex = this.nextOpenHole();
     const undecided = this.firstUndecidedIndex();
-    if (undecided != null && this.holeIndex > undecided) this.holeIndex = undecided;
+    if (undecided != null) {
+      const order = this.playOrder();
+      const at = order.indexOf(this.holeIndex);
+      const undecidedAt = order.indexOf(undecided);
+      if (undecidedAt >= 0 && (at < 0 || at > undecidedAt)) this.holeIndex = undecided;
+    }
     this.capture();
     this.applyForced();
   }
@@ -101,7 +107,11 @@ export class ScoreComponent implements OnInit {
 
   get title(): string {
     const hole = this.hole;
-    return hole ? `Hole ${hole.displayHoleNumber || hole.sequence}` : 'Scores';
+    return hole ? `Hole ${this.courseHole(hole)}` : 'Scores';
+  }
+
+  courseHole(hole: HoleView): number {
+    return hole.displayHoleNumber ?? hole.sequence;
   }
 
   async load(): Promise<void> {
@@ -136,6 +146,8 @@ export class ScoreComponent implements OnInit {
     this.revertUnsavedForced();
     this.groupId = nextId;
     await this.load();
+    this.holeIndex = this.nextOpenHole();
+    this.capture();
     this.applyForced();
   }
 
@@ -147,10 +159,12 @@ export class ScoreComponent implements OnInit {
   }
 
   async previous(): Promise<void> {
-    if (this.holeIndex === 0 || this.saving) return;
+    if (this.onFirstHole || this.saving) return;
     if (!(await this.persist())) return;
     this.revertUnsavedForced();
-    this.holeIndex -= 1;
+    const order = this.playOrder();
+    const at = order.indexOf(this.holeIndex);
+    if (at > 0) this.holeIndex = order[at - 1];
     this.capture();
     this.applyForced();
   }
@@ -159,17 +173,45 @@ export class ScoreComponent implements OnInit {
     return this.holeNeedsDecision(this.hole);
   }
 
-  /** First hole on this card that still has a blank score. The last hole when every score is in. */
+  /** Holes in the order this group plays them, beginning at its starting hole. */
+  private playOrder(): number[] {
+    const count = this.card?.holes.length ?? 0;
+    if (count === 0) return [];
+    const start = this.startIndex();
+    return Array.from({ length: count }, (_, offset) => (start + offset) % count);
+  }
+
+  private startIndex(): number {
+    const start = this.card?.startingHole;
+    if (!this.card || start == null || start < 1) return 0;
+    const index = this.card.holes.findIndex(hole => this.courseHole(hole) === start);
+    return index >= 0 ? index : 0;
+  }
+
+  /**
+   * The hole after the furthest one that already has a score, walking from the starting hole.
+   * Hole 10 being finished must not send you back there when hole 9 is the last hole of the day.
+   */
   private nextOpenHole(): number {
-    if (!this.card || this.card.holes.length === 0) return 0;
-    const blank = this.card.holes.findIndex(hole => hole.lines.some(line => line.gross == null));
-    return blank >= 0 ? blank : this.card.holes.length - 1;
+    const order = this.playOrder();
+    if (order.length === 0 || !this.card) return 0;
+    let lastPlayed = -1;
+    order.forEach((index, step) => {
+      if (this.holePlayed(this.card!.holes[index])) lastPlayed = step;
+    });
+    if (lastPlayed < 0) return order[0];
+    if (lastPlayed >= order.length - 1) return order[lastPlayed];
+    return order[lastPlayed + 1];
+  }
+
+  private holePlayed(hole: HoleView): boolean {
+    return hole.lines.some(line => line.gross != null);
   }
 
   private firstUndecidedIndex(): number | null {
     if (!this.card?.oceans6) return null;
-    const index = this.card.holes.findIndex(hole => this.holeNeedsDecision(hole));
-    return index >= 0 ? index : null;
+    const index = this.playOrder().find(holeIndex => this.holeNeedsDecision(this.card!.holes[holeIndex]));
+    return index ?? null;
   }
 
   private holeNeedsDecision(hole: HoleView | null): boolean {
@@ -177,8 +219,14 @@ export class ScoreComponent implements OnInit {
     return hole.lines.some(line => line.gross != null && line.kept == null);
   }
 
+  get onFirstHole(): boolean {
+    const order = this.playOrder();
+    return order.length === 0 || this.holeIndex === order[0];
+  }
+
   get onLastHole(): boolean {
-    return !!this.card && this.holeIndex >= this.card.holes.length - 1;
+    const order = this.playOrder();
+    return order.length === 0 || this.holeIndex === order[order.length - 1];
   }
 
   get nextLabel(): string {
@@ -191,7 +239,9 @@ export class ScoreComponent implements OnInit {
     if (!(await this.persist())) return;
     if (this.onLastHole) return;
     this.revertUnsavedForced();
-    this.holeIndex += 1;
+    const order = this.playOrder();
+    const at = order.indexOf(this.holeIndex);
+    if (at >= 0 && at < order.length - 1) this.holeIndex = order[at + 1];
     this.capture();
     this.applyForced();
   }
@@ -384,6 +434,7 @@ export class ScoreComponent implements OnInit {
       canPickGroup: !!card.canPickGroup,
       groupId: card.groupId ?? null,
       groupLabel: card.groupLabel ?? null,
+      startingHole: card.startingHole ?? null,
       notice: card.notice ?? null,
     };
     this.groupId = this.card.groupId;

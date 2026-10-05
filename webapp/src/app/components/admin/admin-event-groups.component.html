@@ -3,7 +3,7 @@
     <app-shell nav="back" title="Groups" [backTo]="backTo"></app-shell>
 
     @if (dashboard) {
-      <p class="page-note">Each group is one tee time, up to four players. A 4-player team takes the whole time. Two 2-player teams share one. Individuals can be a threesome.</p>
+      <p class="page-note">Each group starts on one hole, with up to four players. A 4-player scramble team takes the whole group. Groups can share a tee time when they start on different holes.</p>
 
       @if (groups.length === 0) {
         <p class="page-note">No tee times yet.</p>
@@ -14,7 +14,11 @@
               <span class="row-body">
                 <label class="field">
                   <span class="field-label">Tee time</span>
-                  <input type="time" [value]="group.teeTime" (change)="setTime(group.groupId, $event)" />
+                  <input type="time" [value]="group.teeTime" (change)="setTime(group, $event)" />
+                </label>
+                <label class="field">
+                  <span class="field-label">Starting hole</span>
+                  <input type="number" inputmode="numeric" min="1" max="36" [value]="group.startingHole" (change)="setHole(group, $event)" />
                 </label>
                 <span class="row-meta">{{ slots(group) }} of 4</span>
                 <span class="inline-actions">

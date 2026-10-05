@@ -5,6 +5,8 @@ import {
   keepQuotaError,
   mergeGroupHoles,
   scramblePlayingHandicap,
+  latestPlayedHole,
+  scorecardHoles,
   scoreRound,
   strokeAllocation,
   vegasHoleScore,
@@ -63,6 +65,13 @@ describe('stroke allocation', () => {
     expect(allocation.get(3)).toBe(1);
     expect(allocation.get(2)).toBe(0);
   });
+
+  test('a plus handicap gives strokes on the easiest holes', () => {
+    const allocation = strokeAllocation(-2, holes);
+    expect(allocation.get(1)).toBe(0);
+    expect(allocation.get(3)).toBe(-1);
+    expect(allocation.get(2)).toBe(-1);
+  });
 });
 
 describe('vegas', () => {
@@ -92,6 +101,11 @@ describe('vegas', () => {
     expect(team.holes[0].countingScore).toBe(45);
     expect(team.holes[1].countingScore).toBe(54);
     expect(team.total).toBe(99);
+    const card = scorecardHoles(team.holes);
+    expect(card[0].players.map(player => player.gross)).toEqual([4, 5]);
+    expect(card[0].gross).toBe(45);
+    expect(card[1].players.map(player => player.gross)).toEqual([4, 5]);
+    expect(card[1].gross).toBe(54);
     expect(team.toPar).toBeNull();
   });
 
@@ -381,6 +395,23 @@ describe('leaderboard', () => {
     expect(rows.map(row => row.toPar)).toEqual([-1, 0]);
     expect(rows.map(row => row.rank)).toEqual([1, 2]);
     expect(rows.map(row => row.finished)).toEqual([true, false]);
+  });
+
+  test('the thru hole follows the starting hole and wraps to the front', () => {
+    const holes = Array.from({ length: 18 }, (_, index) => ({
+      sequence: index + 1,
+      hole: index + 1,
+      par: 4,
+      gross: null as number | null,
+      net: null as number | null,
+      strokes: 0,
+      kept: null,
+      players: [],
+    }));
+    const back = holes.map(hole => ({ ...hole, gross: hole.hole >= 10 && hole.hole <= 12 ? 4 : null }));
+    expect(latestPlayedHole(back, 10)).toBe(12);
+    const turned = holes.map(hole => ({ ...hole, gross: hole.hole >= 10 || hole.hole === 1 ? 4 : null }));
+    expect(latestPlayedHole(turned, 10)).toBe(1);
   });
 
   test('keeps scored players first, then tee time, then players with no tee time', () => {

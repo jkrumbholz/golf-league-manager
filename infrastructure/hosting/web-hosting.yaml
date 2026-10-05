@@ -60,6 +60,8 @@ Resources:
               - http://localhost:4200
               - https://dev.golfleague.krummy.net
               - https://golfleague.krummy.net
+              - https://dev.minimillions.krummy.net
+              - https://minimillions.krummy.net
             AllowedMethods:
               - POST
               - PUT

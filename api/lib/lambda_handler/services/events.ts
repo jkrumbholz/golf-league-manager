@@ -11,6 +11,8 @@ import {
   LadderTee,
   LeaderboardRow,
   orderLeaderboard,
+  orderFromStartingHole,
+  latestPlayedHole,
   PlayerSetup,
   TeamSetup,
   combineRounds,
@@ -98,6 +100,7 @@ interface GroupMemberRow {
 interface GroupRow {
   id: number;
   teeTime: string | null;
+  startingHole: number;
   members: GroupMemberRow[];
 }
 
@@ -867,11 +870,19 @@ export async function saveGroup(client: Client, user: AuthUser, body: any) {
   const teamFormat = isTeamFormat(bundle.event.format);
 
   if (action === 'create') {
-    const inserted = await client.query(
-      `INSERT INTO tee_group (event_id, tee_time) VALUES ($1, $2::time) RETURNING id`,
-      [eventId, parseTeeTime(body.teeTime)]
-    );
-    return { eventId, groupId: Number(inserted.rows[0].id) };
+    const teeTime = parseTeeTime(body.teeTime);
+    const startingHole = parseStartingHole(body.startingHole, bundle);
+    assertSlotFree(bundle, teeTime, startingHole);
+    try {
+      const inserted = await client.query(
+        `INSERT INTO tee_group (event_id, tee_time, starting_hole) VALUES ($1, $2::time, $3) RETURNING id`,
+        [eventId, teeTime, startingHole]
+      );
+      return { eventId, groupId: Number(inserted.rows[0].id) };
+    } catch (error: any) {
+      if (error?.code === '23505') throw new HttpError('Another group already starts on that hole at this tee time');
+      throw error;
+    }
   }
 
   const groupId = Number(body.groupId);
@@ -879,10 +890,18 @@ export async function saveGroup(client: Client, user: AuthUser, body: any) {
   if (!group) throw new HttpError('Group not found', 404);
 
   if (action === 'setTime') {
-    await client.query(
-      `UPDATE tee_group SET tee_time = $2::time WHERE id = $1 AND event_id = $3`,
-      [groupId, parseTeeTime(body.teeTime), eventId]
-    );
+    const teeTime = parseTeeTime(body.teeTime);
+    const startingHole = body.startingHole == null ? Number(group.startingHole) : parseStartingHole(body.startingHole, bundle);
+    assertSlotFree(bundle, teeTime, startingHole, groupId);
+    try {
+      await client.query(
+        `UPDATE tee_group SET tee_time = $2::time, starting_hole = $3 WHERE id = $1 AND event_id = $4`,
+        [groupId, teeTime, startingHole, eventId]
+      );
+    } catch (error: any) {
+      if (error?.code === '23505') throw new HttpError('Another group already starts on that hole at this tee time');
+      throw error;
+    }
     return { eventId, groupId };
   }
 
@@ -1024,12 +1043,24 @@ export async function getLeaderboard(client: Client, eventId: number) {
     return {
       ...row,
       teeTime: teeTimeSort ? formatTeeTime(teeTimeSort) : null,
+      startingHole: group?.startingHole ?? null,
       teeTimeSort,
       memberUserIds: row.kind === 'team'
         ? bundle.teams.find(team => team.teamId === row.competitorId)?.members.map(member => member.userId) ?? []
         : [row.competitorId],
     };
-  })).map(({ teeTimeSort: _teeTimeSort, ...row }) => row);
+  })).map(({ teeTimeSort: _teeTimeSort, card, ...row }) => {
+    const startingHole = row.startingHole ?? null;
+    const played = orderFromStartingHole(card ?? [], startingHole).filter(hole =>
+      hole.gross != null || hole.players.some(player => player.gross != null)
+    );
+    return {
+      ...row,
+      detailName: nameWithHandicap(bundle, row),
+      lastHole: latestPlayedHole(card ?? [], startingHole) ?? row.lastHole,
+      card: played,
+    };
+  });
   const today = new Date().toISOString().slice(0, 10);
   const status = today > bundle.event.endDate
     ? 'done'
@@ -1309,10 +1340,10 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
     ),
     client.query(
       `
-        SELECT id, tee_time::text AS "teeTime"
+        SELECT id, tee_time::text AS "teeTime", starting_hole AS "startingHole"
         FROM tee_group
         WHERE event_id = $1
-        ORDER BY tee_time, id
+        ORDER BY tee_time, starting_hole, id
       `,
       [eventId]
     ),
@@ -1357,6 +1388,7 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
   const groups: GroupRow[] = groupRows.rows.map(group => ({
     id: Number(group.id),
     teeTime: group.teeTime == null ? null : String(group.teeTime),
+    startingHole: Number(group.startingHole) || 1,
     members: groupMemberRows.rows
       .filter(member => Number(member.groupId) === Number(group.id))
       .map(member => ({
@@ -1490,6 +1522,7 @@ function scorecardFromBundle(
     canPickGroup: false,
     groupId: null as number | null,
     groupLabel: null as string | null,
+    startingHole: null as number | null,
     notice: null as string | null,
     competitorId: null as number | null,
     competitorName: null as string | null,
@@ -1524,8 +1557,9 @@ function scorecardFromBundle(
     canPickGroup,
     groupId: group.id,
     groupLabel: groupOptionLabel(group),
+    startingHole: group.startingHole,
     competitorId: group.id,
-    competitorName: formatTeeTime(group.teeTime),
+    competitorName: groupPlace(group),
     notice: hasLines ? null : 'Nobody is in this group yet.',
     holes: hasLines ? holes : [],
   };
@@ -1536,6 +1570,35 @@ function parseTeeTime(value: any): string {
   const [hour, minute] = value.split(':').map(Number);
   if (hour > 23 || minute > 59) throw new HttpError('Enter a tee time');
   return value;
+}
+
+function courseHoleNumbers(bundle: Bundle): number[] {
+  const roundId = bundle.rounds[0] ? Number(bundle.rounds[0].id) : null;
+  const holes = roundId == null
+    ? bundle.holes
+    : bundle.holes.filter(hole => Number(hole.roundId) === roundId);
+  return holes.map(hole => hole.displayHoleNumber == null ? Number(hole.sequence) : Number(hole.displayHoleNumber));
+}
+
+function parseStartingHole(value: any, bundle: Bundle): number {
+  const hole = Number(value);
+  const onCourse = courseHoleNumbers(bundle);
+  if (!Number.isInteger(hole) || hole < 1) throw new HttpError('Enter a starting hole');
+  if (onCourse.length > 0) {
+    if (!onCourse.includes(hole)) throw new HttpError('Pick a hole on this course');
+    return hole;
+  }
+  if (hole > 36) throw new HttpError('Enter a starting hole from 1 to 36');
+  return hole;
+}
+
+function assertSlotFree(bundle: Bundle, teeTime: string, startingHole: number, exceptGroupId?: number) {
+  const taken = bundle.groups.some(group =>
+    group.id !== exceptGroupId
+    && String(group.teeTime || '').slice(0, 5) === teeTime
+    && Number(group.startingHole) === startingHole
+  );
+  if (taken) throw new HttpError('Another group already starts on that hole at this tee time');
 }
 
 function groupSlots(bundle: Bundle, group: GroupRow): number {
@@ -1563,6 +1626,25 @@ async function assertNotGrouped(client: Client, eventId: number, kind: 'user' | 
   }
 }
 
+function formatHandicap(index: number): string {
+  const rounded = Math.round(Number(index));
+  if (!Number.isFinite(rounded)) return '';
+  if (rounded < 0) return `(+${Math.abs(rounded)})`;
+  return `(${rounded})`;
+}
+
+function nameWithHandicap(bundle: Bundle, row: { kind: string; competitorId: number; name: string }): string {
+  if (row.kind === 'team') {
+    const team = bundle.teams.find(item => item.teamId === row.competitorId);
+    if (!team || team.members.length === 0) return row.name;
+    return team.members.map(member => `${member.displayName} ${formatHandicap(member.handicapIndex)}`.trim()).join(' / ');
+  }
+  const player = bundle.registrations.find(item => Number(item.userId) === row.competitorId);
+  if (!player) return row.name;
+  const handicap = formatHandicap(player.handicapIndex);
+  return handicap ? `${row.name} ${handicap}` : row.name;
+}
+
 function formatTeeTime(value: string | null): string {
   if (!value) return 'No time';
   const match = /^(\d{2}):(\d{2})/.exec(value);
@@ -1573,16 +1655,22 @@ function formatTeeTime(value: string | null): string {
   return `${hour}:${match[2]} ${suffix}`;
 }
 
+function groupPlace(group: GroupRow): string {
+  const time = formatTeeTime(group.teeTime);
+  return group.startingHole ? `${time} · Hole ${group.startingHole}` : time;
+}
+
 function groupOptionLabel(group: GroupRow): string {
   const names = group.members.map(member => member.displayName).filter(name => name.length > 0);
-  const time = formatTeeTime(group.teeTime);
-  return names.length > 0 ? `${time} · ${names.join(', ')}` : time;
+  const place = groupPlace(group);
+  return names.length > 0 ? `${place} · ${names.join(', ')}` : place;
 }
 
 function publicGroups(bundle: Bundle) {
   return bundle.groups.map(group => ({
     groupId: group.id,
     teeTime: group.teeTime ? group.teeTime.slice(0, 5) : '',
+    startingHole: Number(group.startingHole) || 1,
     label: groupOptionLabel(group),
     members: group.members,
   }));

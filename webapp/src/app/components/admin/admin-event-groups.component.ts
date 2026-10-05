@@ -68,11 +68,26 @@ export class AdminEventGroupsComponent extends AdminEventScreen implements OnIni
     void this.router.navigate(['/admin/events', this.eventId, 'groups', 'new']);
   }
 
-  async setTime(groupId: number, event: Event): Promise<void> {
+  async setTime(group: TeeGroup, event: Event): Promise<void> {
     const teeTime = (event.target as HTMLInputElement).value;
-    const current = this.groups.find(group => group.groupId === groupId)?.teeTime;
-    if (!teeTime || teeTime === current) return;
-    await this.run(() => this.api.put('group', { action: 'setTime', eventId: this.eventId, groupId, teeTime }));
+    if (!teeTime || teeTime === group.teeTime) return;
+    await this.saveSlot(group, teeTime, group.startingHole);
+  }
+
+  async setHole(group: TeeGroup, event: Event): Promise<void> {
+    const startingHole = Number((event.target as HTMLInputElement).value);
+    if (!Number.isInteger(startingHole) || startingHole < 1 || startingHole === group.startingHole) return;
+    await this.saveSlot(group, group.teeTime, startingHole);
+  }
+
+  private async saveSlot(group: TeeGroup, teeTime: string, startingHole: number): Promise<void> {
+    await this.run(() => this.api.put('group', {
+      action: 'setTime',
+      eventId: this.eventId,
+      groupId: group.groupId,
+      teeTime,
+      startingHole,
+    }));
   }
 
   async removeGroup(groupId: number): Promise<void> {

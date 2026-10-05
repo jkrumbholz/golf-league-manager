@@ -25,6 +25,7 @@ export interface TeeGroupMember {
 export interface TeeGroup {
   groupId: number;
   teeTime: string;
+  startingHole: number;
   label: string;
   members: TeeGroupMember[];
 }

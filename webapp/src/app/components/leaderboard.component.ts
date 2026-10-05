@@ -1,3 +1,4 @@
+import { NgClass } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../services/api.service';
@@ -13,19 +14,40 @@ interface KeepProgress {
   discarded: number;
 }
 
+interface CardPlayer {
+  name: string;
+  gross: number | null;
+  net: number | null;
+  strokes: number;
+}
+
+interface PlayedHole {
+  sequence: number;
+  hole: number;
+  par: number;
+  gross: number | null;
+  net: number | null;
+  strokes: number;
+  kept: boolean | null;
+  players?: CardPlayer[];
+}
+
 interface BoardRow {
   competitorId: number;
   rank: number;
   name: string;
+  detailName?: string;
   thru: number;
   total: number | null;
   toPar: number | null;
   lastHole: number | null;
   finished?: boolean;
   teeTime: string | null;
+  startingHole?: number | null;
   currentTeeName: string | null;
   memberUserIds: number[];
   keeps?: KeepProgress[] | null;
+  card?: PlayedHole[];
 }
 
 interface Board {
@@ -48,7 +70,7 @@ interface Board {
 @Component({
   selector: 'app-leaderboard',
   standalone: true,
-  imports: [RouterLink, ShellComponent],
+  imports: [NgClass, RouterLink, ShellComponent],
   templateUrl: './leaderboard.component.html',
 })
 export class LeaderboardComponent implements OnInit, OnDestroy {
@@ -82,7 +104,9 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
   holeLabel(row: BoardRow): string {
     if (this.isFinished(row)) return 'F';
     if (row.lastHole != null) return String(row.lastHole);
-    return row.teeTime || 'No Tee Time';
+    if (!row.teeTime) return 'No Tee Time';
+    if (row.startingHole && row.startingHole > 1) return `${row.teeTime} · ${row.startingHole}`;
+    return row.teeTime;
   }
 
   missingTeeTime(row: BoardRow): boolean {
@@ -135,12 +159,63 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     return !!row.keeps && row.keeps.length > 0;
   }
 
+  playedHoles(row: BoardRow): PlayedHole[] {
+    return row.card ?? [];
+  }
+
+  teamCard(row: BoardRow): boolean {
+    return this.cardPlayers(row).length > 1;
+  }
+
+  cardPlayers(row: BoardRow): CardPlayer[] {
+    return this.playedHoles(row).find(hole => (hole.players?.length ?? 0) > 0)?.players ?? [];
+  }
+
+  playerCountClass(row: BoardRow): string {
+    return `players-${this.cardPlayers(row).length}`;
+  }
+
+  strokeDots(count: number): number[] {
+    const dots = Math.max(0, count);
+    return Array.from({ length: dots }, (_, index) => index);
+  }
+
+  givenMarks(count: number): string {
+    return '+'.repeat(Math.abs(count));
+  }
+
+  grossTotal(row: BoardRow): number {
+    return this.playedHoles(row).reduce((sum, hole) => sum + (hole.kept === false ? 0 : hole.gross ?? 0), 0);
+  }
+
+  netTotal(row: BoardRow): number {
+    return this.playedHoles(row).reduce((sum, hole) => {
+      if (hole.kept === false) return sum;
+      return sum + (hole.net ?? hole.gross ?? 0);
+    }, 0);
+  }
+
+  playerGrossTotal(row: BoardRow, index: number): number {
+    return this.playedHoles(row).reduce((sum, hole) => sum + (hole.players?.[index]?.gross ?? 0), 0);
+  }
+
+  playerNetTotal(row: BoardRow, index: number): number {
+    return this.playedHoles(row).reduce((sum, hole) => {
+      const player = hole.players?.[index];
+      if (!player || player.gross == null) return sum;
+      return sum + (player.net ?? player.gross);
+    }, 0);
+  }
+
+  teamTotal(row: BoardRow): number {
+    return this.playedHoles(row).reduce((sum, hole) => sum + (hole.gross ?? 0), 0);
+  }
+
   isOpen(row: BoardRow): boolean {
     return this.expandedId === row.competitorId;
   }
 
   toggle(row: BoardRow): void {
-    if (!this.hasKeeps(row)) return;
     this.expandedId = this.isOpen(row) ? null : row.competitorId;
   }
 
