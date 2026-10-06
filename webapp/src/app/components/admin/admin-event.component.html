@@ -76,6 +76,7 @@
       </div>
 
       <a class="btn-primary" [routerLink]="['/events', eventId]">View leaderboard</a>
+      <button class="btn-quiet btn-danger btn-wide" type="button" [disabled]="busy" (click)="archive()">Archive event</button>
     }
 
     @if (error) { <p class="error">{{ error }}</p> }

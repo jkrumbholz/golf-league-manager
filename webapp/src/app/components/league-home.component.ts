@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../services/api.service';
 import { CourseNameService } from '../services/course-name.service';
+import { formatHandicapIndex } from '../models/handicap';
 import { ShellComponent } from '../ui/shell.component';
 
 interface Season {
@@ -40,6 +41,7 @@ export class LeagueHomeComponent implements OnInit {
   upcoming: LeagueEvent[] = [];
   past: LeagueEvent[] = [];
   members: Array<{ userId: number; displayName: string; role: string; handicapIndex: number }> = [];
+  readonly formatIndex = formatHandicapIndex;
   error = '';
 
   constructor(

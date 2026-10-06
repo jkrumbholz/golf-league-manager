@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Registration } from '../../models/dashboard';
+import { formatHandicapIndex } from '../../models/handicap';
 import { ShellComponent } from '../../ui/shell.component';
 import { AdminEventScreen } from './admin-event-screen';
 
@@ -14,6 +15,7 @@ export class AdminEventPlayersComponent extends AdminEventScreen implements OnIn
   private router = inject(Router);
 
   notice = '';
+  readonly formatIndex = formatHandicapIndex;
 
   async ngOnInit(): Promise<void> {
     await this.load();

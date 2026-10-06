@@ -1,12 +1,21 @@
 import { Handler } from 'aws-cdk-lib/aws-lambda';
-import { handle } from '../util/http';
+import { handle, HttpError } from '../util/http';
 import { withClient } from '../util/db';
 import { requireUser } from '../util/auth';
-import { saveEvent } from '../services/events';
+import { archiveEvent, hardDeleteEvent, saveEvent } from '../services/events';
 
 export const handler: Handler = async (event: any) => handle(event, async (body) => {
   return withClient(async (client) => {
     const user = await requireUser(client, body);
+    const eventId = Number(body.id);
+    if (body.action === 'archive') {
+      if (!eventId) throw new HttpError('Event is required');
+      return archiveEvent(client, user, eventId);
+    }
+    if (body.action === 'hardDelete') {
+      if (!eventId) throw new HttpError('Event is required');
+      return hardDeleteEvent(client, user, eventId);
+    }
     return saveEvent(client, user, body);
   });
 });

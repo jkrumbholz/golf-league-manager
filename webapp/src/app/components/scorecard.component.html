@@ -32,6 +32,9 @@
                     }
                   </span>
                 }
+                @if (givenMarks(hole, column.key)) {
+                  <span class="sc-give">{{ givenMarks(hole, column.key) }}</span>
+                }
                 <span class="sc-gross" [class.sc-under]="relation(hole, column.key) === 'under'" [class.sc-over]="relation(hole, column.key) === 'over'">{{ line(hole, column.key)?.gross ?? '–' }}</span>
                 @if (discarded(hole, column.key)) {
                   <span class="sc-out-label">Out</span>
@@ -53,7 +56,7 @@
             </div>
           }
         </div>
-        <p class="page-note">Tap a hole to change a score. A circle is under par and a square is over par. Dots in the corner are strokes on that hole. Out is a discarded score and is not in the total. A small number is the net after strokes.</p>
+        <p class="page-note">Tap a hole to change a score. A circle is under par and a square is over par. A gold dot is a stroke received. A gold + is a stroke given back. Out is a discarded score and is not in the total. A small number is the net after strokes.</p>
       }
     }
 

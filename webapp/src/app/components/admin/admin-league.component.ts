@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { CourseNameService } from '../../services/course-name.service';
 import { ImageService } from '../../services/image.service';
+import { formatHandicapIndex } from '../../models/handicap';
 import { ShellComponent } from '../../ui/shell.component';
 
 interface Season {
@@ -38,6 +39,8 @@ export class AdminLeagueComponent implements OnInit {
   tab: 'seasons' | 'players' = 'seasons';
   seasons: Season[] = [];
   members: Member[] = [];
+  removingId = 0;
+  readonly formatIndex = formatHandicapIndex;
   error = '';
 
   constructor(
@@ -75,6 +78,22 @@ export class AdminLeagueComponent implements OnInit {
 
   memberRole(member: Member): string {
     return member.role === 'organizer' ? 'Organizer' : 'Player';
+  }
+
+  async remove(member: Member): Promise<void> {
+    if (this.removingId) return;
+    const ok = window.confirm(`Remove ${member.displayName} from this league? Scores they already posted stay on those events.`);
+    if (!ok) return;
+    this.removingId = member.userId;
+    this.error = '';
+    try {
+      await this.api.put('league', { action: 'removePlayer', leagueId: this.leagueId, userId: member.userId });
+      this.members = this.members.filter(item => item.userId !== member.userId);
+    } catch (error: unknown) {
+      this.error = error instanceof Error ? error.message : 'Could not remove that player';
+    } finally {
+      this.removingId = 0;
+    }
   }
 
   async onLogo(event: Event): Promise<void> {

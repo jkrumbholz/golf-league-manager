@@ -12,7 +12,7 @@
             <button class="row" type="button" (click)="toggle(player.userId)">
               <span class="row-body">
                 <span class="row-title">{{ player.displayName }}</span>
-                <span class="row-meta">{{ player.handicapIndex }} index</span>
+                <span class="row-meta">{{ formatIndex(player.handicapIndex) }} index</span>
               </span>
               <span class="check" [class.check-on]="isSelected(player.userId)">&#10003;</span>
             </button>

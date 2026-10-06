@@ -28,16 +28,30 @@
 
         <label class="field">
           <span class="field-label">Handicap index</span>
-          <input name="handicapIndex" type="number" inputmode="decimal" step="0.1" [(ngModel)]="handicapIndex" />
+          <input name="handicapIndex" inputmode="decimal" [(ngModel)]="handicapText" placeholder="10.4 or +1.4" />
           @if (fieldErrors['handicapIndex']) {
             <span class="field-error">{{ fieldErrors['handicapIndex'] }}</span>
           } @else {
-            <span class="field-hint">Strokes on every round use this index.</span>
+            <span class="field-hint">Use 10.4 or +1.4. A plus index gives strokes back.</span>
           }
         </label>
 
         <button class="btn-primary" type="submit" [disabled]="saving">Save player</button>
       </form>
+
+      <button class="btn-secondary btn-wide" type="button" (click)="copyAccountLink()">
+        {{ hasLogin ? 'Copy password reset link' : 'Copy setup link' }}
+      </button>
+      @if (link) {
+        <div class="card">
+          <div class="row row-static">
+            <span class="row-body">
+              <span class="link-text">{{ link }}</span>
+            </span>
+          </div>
+        </div>
+        <p class="page-note">{{ copied ? 'Copied. ' : '' }}Send this outside the app. It expires in 3 days. A new link replaces the previous one.</p>
+      }
     }
 
     @if (error) { <p class="error">{{ error }}</p> }

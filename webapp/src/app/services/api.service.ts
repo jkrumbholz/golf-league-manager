@@ -40,7 +40,7 @@ export class ApiService {
     const base = this.config.leagueApi();
     try {
       return await firstValueFrom(this.http.request<T>(method, `${base}/${path}`, {
-        body: { ...body, token: this.auth.token() },
+        body: { token: this.auth.token(), ...body },
       }));
     } catch (error: unknown) {
       const response = error as { error?: { error?: string }; message?: string };

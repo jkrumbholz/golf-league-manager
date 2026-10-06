@@ -7,7 +7,8 @@ export type EventFormat =
   | 'vegas_up_and_back'
   | 'oceans_6'
   | 'scramble'
-  | 'alternate_shot';
+  | 'alternate_shot'
+  | 'low_high_total';
 
 export const FORMAT_LABELS: Record<EventFormat, string> = {
   stroke_play: 'Stroke Play (net)',
@@ -19,6 +20,7 @@ export const FORMAT_LABELS: Record<EventFormat, string> = {
   oceans_6: "Ocean's 6",
   scramble: 'Scramble',
   alternate_shot: 'Alternate Shot',
+  low_high_total: 'Low / High / Combo',
 };
 
 const OCEANS_QUOTA: Record<number, number> = { 3: 1, 4: 4, 5: 1 };
@@ -41,7 +43,7 @@ export function usesRunningTee(format: EventFormat): boolean {
 
 export function fixedTeamSize(format: EventFormat): number | null {
   if (format === 'stroke_play' || format === 'oceans_6') return 1;
-  if (format === 'vegas' || format === 'vegas_up_and_back' || format === 'alternate_shot') return 2;
+  if (format === 'vegas' || format === 'vegas_up_and_back' || format === 'alternate_shot' || format === 'low_high_total') return 2;
   return null;
 }
 
@@ -103,6 +105,10 @@ export interface HoleView {
   ladderOrder: number;
   lines: HoleLine[];
   countingScore: number | null;
+  /** Combo holes count both nets. The card shows that total; the round still ranks on to-par. */
+  relative?: boolean;
+  /** This hole's contribution to the team score versus par. Tiebreakers use it when set. */
+  standing?: number | null;
   complete: boolean;
 }
 
@@ -141,6 +147,22 @@ export interface LeaderboardRow {
   keeps: KeepProgress[] | null;
   /** Every hole on the card, in course order. The leaderboard reorders this from the starting hole. */
   card?: ScorecardHole[];
+  /** How a shared score was broken. Null when this row was not in a tie. */
+  tiebreaker?: Tiebreaker | null;
+}
+
+export interface TiebreakStep {
+  criterion: string;
+  description: string;
+  scores: Array<{ competitorId: number; name: string; score: number }>;
+  result: 'tie' | 'split';
+  summary: string;
+}
+
+export interface Tiebreaker {
+  standing: number;
+  steps: TiebreakStep[];
+  order: Array<{ competitorId: number; name: string; rank: number }>;
 }
 
 export interface ScorecardPlayer {
@@ -160,6 +182,9 @@ export interface ScorecardHole {
   /** Positive when the player receives a stroke. Negative when they give one. */
   strokes: number;
   kept: boolean | null;
+  strokeIndex: number | null;
+  relative?: boolean;
+  standing?: number | null;
   /** One entry per player on a team card. Empty when the hole is a single score. */
   players: ScorecardPlayer[];
 }
@@ -174,10 +199,26 @@ export function teamNameFromPlayers(displayNames: string[]): string {
   return displayNames.map(name => name.trim()).filter(name => name.length > 0).join(' / ');
 }
 
-export function individualPlayingHandicap(format: EventFormat, handicapIndex: number, holeCount: number): number {
-  const rounded = Math.round(Number(handicapIndex) || 0);
-  if (holeCount <= 9) return Math.round(rounded / 2);
-  return rounded;
+/**
+ * Strokes for one player. A negative result is a plus handicap (strokes given).
+ * The index is rounded by magnitude first, so +4.5 and 4.5 both become 5 strokes
+ * of the correct direction. Math.round on a negative number would round +4.5 down
+ * to +4. A 9-hole card then uses half of that rounded index, rounded again.
+ * Allowance is the event percentage applied after that conversion.
+ */
+export function individualPlayingHandicap(
+  format: EventFormat,
+  handicapIndex: number,
+  holeCount: number,
+  allowance = 100
+): number {
+  const index = Number(handicapIndex) || 0;
+  const giving = index < 0;
+  let strokes = Math.round(Math.abs(index));
+  if (holeCount <= 9) strokes = Math.round(strokes / 2);
+  const percent = Number.isFinite(allowance) ? Math.min(100, Math.max(0, allowance)) : 100;
+  strokes = Math.round(strokes * (percent / 100));
+  return giving && strokes ? -strokes : strokes;
 }
 
 export function strokeAllocation(playingHandicap: number, holes: HoleSetup[]): Map<number, number> {
@@ -320,13 +361,14 @@ export function scoreRound(
   ladder: LadderTee[],
   players: PlayerSetup[],
   teams: TeamSetup[],
-  grosses: HoleGross[]
+  grosses: HoleGross[],
+  allowance = 100
 ): CompetitorTotal[] {
   const orderedHoles = [...holes].sort((a, b) => a.sequence - b.sequence);
   if (isTeamFormat(format)) {
-    return teams.map(team => scoreTeam(format, orderedHoles, ladder, players.filter(player => player.teamId === team.teamId), team, grosses));
+    return teams.map(team => scoreTeam(format, orderedHoles, ladder, players.filter(player => player.teamId === team.teamId), team, grosses, allowance));
   }
-  return players.map(player => scorePlayer(format, orderedHoles, ladder, player, grosses));
+  return players.map(player => scorePlayer(format, orderedHoles, ladder, player, grosses, allowance));
 }
 
 export function combineRounds(rounds: CompetitorTotal[][], format?: EventFormat): LeaderboardRow[] {
@@ -384,7 +426,11 @@ export function orderLeaderboard<T extends LeaderboardRow & { teeTimeSort?: stri
     const bScore = standing(b);
     if ((aScore === null) !== (bScore === null)) return aScore === null ? 1 : -1;
     if (aScore !== null && bScore !== null && aScore !== bScore) return aScore - bScore;
-    if (aScore !== null) return a.name.localeCompare(b.name);
+    if (aScore !== null) {
+      const broken = compareTiebreak(a, b);
+      if (broken !== 0) return broken;
+      return a.name.localeCompare(b.name);
+    }
 
     const aTee = a.teeTimeSort || null;
     const bTee = b.teeTimeSort || null;
@@ -405,14 +451,16 @@ export function orderLeaderboard<T extends LeaderboardRow & { teeTimeSort?: stri
       row.rank = index + 1;
       return;
     }
-    if (previousScore !== null && score === previousScore) {
-      row.rank = ordered[index - 1].rank;
+    const previous = index > 0 ? ordered[index - 1] : null;
+    if (previous && previousScore !== null && score === previousScore && compareTiebreak(previous, row) === 0) {
+      row.rank = previous.rank;
     } else {
       row.rank = index + 1;
     }
     previousScore = score;
   });
 
+  attachTiebreakers(ordered);
   return ordered;
 }
 
@@ -421,9 +469,10 @@ function scorePlayer(
   holes: HoleSetup[],
   ladder: LadderTee[],
   player: PlayerSetup,
-  grosses: HoleGross[]
+  grosses: HoleGross[],
+  allowance = 100
 ): CompetitorTotal {
-  const handicap = individualPlayingHandicap(format, player.handicapIndex, holes.length);
+  const handicap = individualPlayingHandicap(format, player.handicapIndex, holes.length, allowance);
   const strokes = strokeAllocation(handicap, holes);
   const holeViews: HoleView[] = [];
   let total = 0;
@@ -479,12 +528,13 @@ function scoreTeam(
   ladder: LadderTee[],
   members: PlayerSetup[],
   team: TeamSetup,
-  grosses: HoleGross[]
+  grosses: HoleGross[],
+  allowance = 100
 ): CompetitorTotal {
   const holeCount = holes.length;
   const memberHandicaps = new Map<number, number>();
   members.forEach(member => {
-    memberHandicaps.set(member.userId, individualPlayingHandicap(format, member.handicapIndex, holeCount));
+    memberHandicaps.set(member.userId, individualPlayingHandicap(format, member.handicapIndex, holeCount, allowance));
   });
 
   const sortedHandicaps = [...memberHandicaps.values()].sort((a, b) => a - b);
@@ -505,6 +555,7 @@ function scoreTeam(
   let parSum = 0;
   let thru = 0;
   let counted = false;
+  let toParSum = 0;
   const trackToPar = !isVegasFormat(format);
 
   holes.forEach(hole => {
@@ -520,12 +571,23 @@ function scoreTeam(
     });
 
     const netsReady = lines.length > 0 && lines.every(line => line.gross !== null && line.net !== null);
-    const complete = netsReady && (!isVegasFormat(format) || lines.length === 2);
+    const needsPair = isVegasFormat(format) || format === 'low_high_total';
+    const complete = netsReady && (!needsPair || lines.length === 2);
     let countingScore: number | null = null;
+    let relative = false;
+    let standing: number | null = null;
 
     if (complete) {
       const nets = lines.map(line => line.net as number);
-      if (format === 'best_ball') countingScore = Math.min(...nets);
+      if (format === 'low_high_total') {
+        const phase = lowHighPhase(hole, holes);
+        if (phase === 'low') countingScore = Math.min(...nets);
+        else if (phase === 'high') countingScore = Math.max(...nets);
+        else countingScore = nets.reduce((sum, net) => sum + net, 0);
+        relative = phase === 'both';
+        standing = relative ? countingScore - hole.par * 2 : countingScore - hole.par;
+        toParSum += standing;
+      } else if (format === 'best_ball') countingScore = Math.min(...nets);
       else if (format === 'high_ball') countingScore = Math.max(...nets);
       else if (isVegasFormat(format)) countingScore = vegasHoleScore(nets[0], nets[1], hole.par);
       else if (format === 'up_and_back') countingScore = nets.reduce((sum, net) => sum + net, 0);
@@ -555,19 +617,34 @@ function scoreTeam(
       ladderOrder: tee?.ladderOrder ?? teeOrder,
       lines,
       countingScore,
+      relative,
+      standing,
       complete,
     });
   });
 
+  const toPar = format === 'low_high_total'
+    ? (counted ? toParSum : null)
+    : counted && trackToPar ? total - parSum : null;
   return finishCompetitor(
     team.teamId,
     team.name,
     'team',
     holeViews,
     counted ? total : null,
-    counted && trackToPar ? total - parSum : null,
+    toPar,
     thru
   );
+}
+
+/** First three holes of each nine: low net. Next three: high net. Last three: both nets against double par. */
+function lowHighPhase(hole: HoleSetup, holes: HoleSetup[]): 'low' | 'high' | 'both' {
+  const ordered = [...holes].sort((a, b) => courseHoleNumber(a) - courseHoleNumber(b) || a.sequence - b.sequence);
+  const index = Math.max(0, ordered.findIndex(item => item.sequence === hole.sequence));
+  const place = index % 9;
+  if (place < 3) return 'low';
+  if (place < 6) return 'high';
+  return 'both';
 }
 
 function isVegasFormat(format: EventFormat): boolean {
@@ -641,6 +718,169 @@ function addKeeps(current: KeepProgress[], extra: KeepProgress[]): KeepProgress[
   }));
 }
 
+function canTiebreak(row: LeaderboardRow): boolean {
+  return row.finished === true && (row.card?.length ?? 0) > 0;
+}
+
+function countingHoleScore(hole: ScorecardHole): number | null {
+  if (hole.kept === false) return null;
+  if (hole.standing != null) return hole.standing;
+  if (hole.players.length > 1) return hole.gross;
+  return hole.net ?? hole.gross;
+}
+
+function sumPhysicalHoles(row: LeaderboardRow, numbers: number[]): number | null {
+  let sum = 0;
+  for (const number of numbers) {
+    const hole = row.card?.find(item => item.hole === number);
+    const score = hole ? countingHoleScore(hole) : null;
+    if (score == null) return null;
+    sum += score;
+  }
+  return sum;
+}
+
+interface TieCriterion {
+  id: string;
+  description: string;
+  score: (row: LeaderboardRow) => number | null;
+}
+
+function lastPlayedHoles(card: ScorecardHole[], count: number): number[] {
+  return [...card]
+    .sort((a, b) => a.hole - b.hole || a.sequence - b.sequence)
+    .slice(Math.max(0, card.length - count))
+    .map(hole => hole.hole);
+}
+
+function tieCriteria(rows: LeaderboardRow[]): TieCriterion[] {
+  const card = rows[0]?.card ?? [];
+  const criteria: TieCriterion[] = [];
+  const addSum = (count: number, id: string, label: string) => {
+    const numbers = lastPlayedHoles(card, count);
+    if (numbers.length < count) return;
+    criteria.push({
+      id,
+      description: `${label} (${numbers.join(', ')})`,
+      score: row => sumPhysicalHoles(row, numbers),
+    });
+  };
+  addSum(4, 'last_4_holes', 'Last 4 holes');
+  addSum(3, 'last_3_holes', 'Last 3 holes');
+  const ranked = [...card]
+    .filter(hole => hole.strokeIndex != null)
+    .sort((a, b) => (a.strokeIndex! - b.strokeIndex!) || a.hole - b.hole);
+  ranked.forEach(hole => {
+    criteria.push({
+      id: `handicap_${hole.strokeIndex}`,
+      description: `Handicap #${hole.strokeIndex} — Hole ${hole.hole}`,
+      score: row => {
+        const match = row.card?.find(item => item.sequence === hole.sequence);
+        return match ? countingHoleScore(match) : null;
+      },
+    });
+  });
+  return criteria;
+}
+
+function tieSummary(scores: TiebreakStep['scores']): { result: 'tie' | 'split'; summary: string } {
+  const low = Math.min(...scores.map(item => item.score));
+  const ahead = scores.filter(item => item.score === low);
+  if (ahead.length === scores.length) return { result: 'tie', summary: 'Still tied.' };
+  const names = (items: TiebreakStep['scores']) => items.map(item => item.name).join(' and ');
+  const parts: string[] = [];
+  if (ahead.length === 1) parts.push(`${ahead[0].name} finishes ahead.`);
+  else parts.push(`${names(ahead)} remain tied.`);
+  const rest = scores.filter(item => item.score !== low);
+  const seen = new Set<number>();
+  rest.forEach(item => {
+    if (seen.has(item.score)) return;
+    seen.add(item.score);
+    const cluster = rest.filter(other => other.score === item.score);
+    if (cluster.length > 1) parts.push(`${names(cluster)} remain tied.`);
+  });
+  return { result: 'split', summary: parts.join(' ') };
+}
+
+function buildTieSteps(rows: LeaderboardRow[]): TiebreakStep[] {
+  const steps: TiebreakStep[] = [];
+  let groups: LeaderboardRow[][] = [rows];
+  for (const criterion of tieCriteria(rows)) {
+    const next: LeaderboardRow[][] = [];
+    for (const group of groups) {
+      if (group.length < 2) {
+        next.push(group);
+        continue;
+      }
+      const scored = group.map(row => ({ row, score: criterion.score(row) }));
+      if (scored.some(item => item.score == null)) {
+        next.push(group);
+        continue;
+      }
+      const buckets = new Map<number, LeaderboardRow[]>();
+      scored.forEach(item => {
+        const list = buckets.get(item.score as number) ?? [];
+        list.push(item.row);
+        buckets.set(item.score as number, list);
+      });
+      const outcome = tieSummary(scored.map(item => ({
+        competitorId: item.row.competitorId,
+        name: item.row.name,
+        score: item.score as number,
+      })));
+      steps.push({
+        criterion: criterion.id,
+        description: criterion.description,
+        scores: scored.map(item => ({
+          competitorId: item.row.competitorId,
+          name: item.row.name,
+          score: item.score as number,
+        })),
+        result: outcome.result,
+        summary: outcome.summary,
+      });
+      [...buckets.keys()].sort((a, b) => a - b).forEach(score => next.push(buckets.get(score) ?? []));
+    }
+    groups = next;
+    if (groups.every(group => group.length < 2)) break;
+  }
+  return steps;
+}
+
+function compareTiebreak(a: LeaderboardRow, b: LeaderboardRow): number {
+  if (!canTiebreak(a) || !canTiebreak(b)) return 0;
+  for (const step of buildTieSteps([a, b])) {
+    if (step.result !== 'split') continue;
+    const aScore = step.scores.find(item => item.competitorId === a.competitorId)?.score;
+    const bScore = step.scores.find(item => item.competitorId === b.competitorId)?.score;
+    if (aScore == null || bScore == null || aScore === bScore) continue;
+    return aScore - bScore;
+  }
+  return 0;
+}
+
+function attachTiebreakers(rows: LeaderboardRow[]): void {
+  let index = 0;
+  while (index < rows.length) {
+    const score = standing(rows[index]);
+    let end = index + 1;
+    while (end < rows.length && standing(rows[end]) === score) end += 1;
+    const group = rows.slice(index, end);
+    const tied = score !== null && group.length > 1 && group.every(canTiebreak);
+    const payload: Tiebreaker | null = tied
+      ? {
+          standing: score as number,
+          steps: buildTieSteps(group),
+          order: group.map(row => ({ competitorId: row.competitorId, name: row.name, rank: row.rank })),
+        }
+      : null;
+    group.forEach(row => {
+      row.tiebreaker = payload;
+    });
+    index = end;
+  }
+}
+
 function standing(row: LeaderboardRow): number | null {
   if (row.total === null) return null;
   return row.toPar ?? row.total;
@@ -695,6 +935,9 @@ export function scorecardHoles(holes: HoleView[]): ScorecardHole[] {
       net: single ? (line?.net ?? null) : null,
       strokes: single ? (line?.strokes ?? 0) : 0,
       kept: single ? (line?.kept ?? null) : null,
+      strokeIndex: hole.strokeIndex,
+      relative: hole.relative === true,
+      standing: hole.standing ?? null,
       players: single ? [] : hole.lines.map(item => ({
         name: item.displayName,
         gross: item.gross,

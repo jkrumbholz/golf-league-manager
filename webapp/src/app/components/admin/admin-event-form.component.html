@@ -35,6 +35,12 @@
         <input name="entryFee" type="number" inputmode="decimal" step="0.01" [(ngModel)]="entryFee" />
       </label>
 
+      <label class="field">
+        <span class="field-label">Handicap allowance %</span>
+        <input name="handicapAllowance" type="number" inputmode="decimal" min="0" max="100" step="1" [(ngModel)]="handicapAllowance" />
+        <span class="field-hint">100 uses the full index. 50 plays half the strokes. A plus index is reduced the same way.</span>
+      </label>
+
       @if (selectedFormat.team) {
         @if (selectedFormat.teamSize === null) {
           <label class="field">

@@ -14,9 +14,9 @@
               <span class="row-body">
                 <span class="row-title">{{ player.displayName }}</span>
                 <span class="row-meta">
-                  {{ player.handicapIndex }} index
+                  {{ formatIndex(player.handicapIndex) }} index
                   @if (staleIndex(player)) {
-                    · profile {{ player.profileHandicapIndex }}
+                    · profile {{ formatIndex(player.profileHandicapIndex) }}
                   }
                 </span>
               </span>

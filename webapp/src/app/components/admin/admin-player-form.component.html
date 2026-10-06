@@ -21,8 +21,8 @@
           @for (match of matches; track match.userId) {
             <div class="row row-static">
               <span class="row-body">
-                <span class="row-title">{{ match.displayName }}</span>
-                <span class="row-meta">{{ match.username }} · {{ match.handicapIndex }} index</span>
+                <span class="row-title">{{ match.firstName }} {{ match.lastName }}</span>
+                <span class="row-meta">{{ match.username || 'No login yet' }} · {{ formatIndex(match.handicapIndex) }} index</span>
               </span>
               <button class="add-button" type="button" (click)="addExisting(match.userId)">Add</button>
             </div>
@@ -31,6 +31,18 @@
       } @else if (searched) {
         <p class="page-note">No accounts matched. Switch to Brand new to create one.</p>
       }
+    } @else if (setupLink) {
+      <p class="page-note">Send this link outside the app. They choose their own username and password. It expires in 3 days.</p>
+      <div class="card">
+        <div class="row row-static">
+          <span class="row-body">
+            <span class="link-text">{{ setupLink }}</span>
+          </span>
+        </div>
+      </div>
+      <button class="btn-primary" type="button" (click)="copyLink()">Copy setup link</button>
+      @if (copied) { <p class="page-note">Copied.</p> }
+      <button class="btn-secondary btn-wide" type="button" (click)="done()">Done</button>
     } @else {
       <form class="form" (ngSubmit)="createPlayer()">
         <label class="field">
@@ -46,26 +58,16 @@
         </label>
 
         <label class="field">
-          <span class="field-label">Username</span>
-          <input name="username" autocapitalize="none" [(ngModel)]="username" />
-          @if (fieldErrors['username']) { <span class="field-error">{{ fieldErrors['username'] }}</span> }
-        </label>
-
-        <label class="field">
-          <span class="field-label">Starter password</span>
-          <input name="password" type="text" [(ngModel)]="password" />
-          @if (fieldErrors['password']) {
-            <span class="field-error">{{ fieldErrors['password'] }}</span>
+          <span class="field-label">Handicap index</span>
+          <input name="handicapIndex" inputmode="decimal" [(ngModel)]="handicapText" placeholder="10.4 or +1.4" />
+          @if (fieldErrors['handicapIndex']) {
+            <span class="field-error">{{ fieldErrors['handicapIndex'] }}</span>
           } @else {
-            <span class="field-hint">Share this with them so they can sign in and change it.</span>
+            <span class="field-hint">Use 10.4 or +1.4. A plus index gives strokes back.</span>
           }
         </label>
 
-        <label class="field">
-          <span class="field-label">Handicap index</span>
-          <input name="handicapIndex" type="number" inputmode="decimal" step="0.1" [(ngModel)]="handicapIndex" />
-        </label>
-
+        <p class="page-note">After you create them, copy a link and send it. They choose their own username and password.</p>
         <button class="btn-primary" type="submit" [disabled]="saving">Create player</button>
       </form>
     }

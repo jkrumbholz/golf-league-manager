@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
+import { parseHandicapIndex } from '../models/handicap';
 import { ShellComponent } from '../ui/shell.component';
 
 @Component({
@@ -15,20 +16,25 @@ export class RegisterComponent {
   password = '';
   firstName = '';
   lastName = '';
-  handicapIndex = 0;
+  handicapText = '0';
   error = '';
 
   constructor(private auth: AuthService, private router: Router) {}
 
   async submit(): Promise<void> {
     this.error = '';
+    const handicapIndex = parseHandicapIndex(this.handicapText);
+    if (handicapIndex == null) {
+      this.error = 'Enter a handicap like 10.4 or +1.4';
+      return;
+    }
     try {
       await this.auth.register({
         username: this.username,
         password: this.password,
         firstName: this.firstName,
         lastName: this.lastName,
-        handicapIndex: Number(this.handicapIndex),
+        handicapIndex,
       });
       await this.router.navigateByUrl('/leagues');
     } catch (error: unknown) {

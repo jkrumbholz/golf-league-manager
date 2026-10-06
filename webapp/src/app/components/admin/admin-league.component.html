@@ -45,13 +45,13 @@
       } @else {
         <div class="card">
           @for (member of members; track member.userId) {
-            <a class="row" [routerLink]="['/admin/leagues', leagueId, 'players', member.userId]">
-              <span class="row-body">
+            <div class="row row-static">
+              <a class="row-body" [routerLink]="['/admin/leagues', leagueId, 'players', member.userId]">
                 <span class="row-title">{{ member.displayName }}</span>
-                <span class="row-meta">{{ memberRole(member) }} · {{ member.handicapIndex }} index</span>
-              </span>
-              <span class="chevron">&#8250;</span>
-            </a>
+                <span class="row-meta">{{ memberRole(member) }} · {{ formatIndex(member.handicapIndex) }} index</span>
+              </a>
+              <button class="btn-quiet btn-danger" type="button" [disabled]="removingId === member.userId" (click)="remove(member)">Remove</button>
+            </div>
           }
         </div>
       }

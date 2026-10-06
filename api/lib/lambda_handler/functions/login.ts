@@ -19,7 +19,7 @@ export const handler: Handler = async (event: any) => handle(event, async (body)
       [username]
     );
     const row = result.rows[0];
-    if (!row || !(await verifyPassword(password, row.password_hash))) {
+    if (!row?.password_hash || !(await verifyPassword(password, row.password_hash))) {
       return { isSuccess: false };
     }
 

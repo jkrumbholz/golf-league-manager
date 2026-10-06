@@ -2,11 +2,14 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
+import { formatHandicapIndex, parseHandicapIndex } from '../../models/handicap';
 import { ShellComponent } from '../../ui/shell.component';
 
 interface Match {
   userId: number;
-  username: string;
+  username: string | null;
+  firstName: string;
+  lastName: string;
   displayName: string;
   handicapIndex: number;
 }
@@ -23,11 +26,12 @@ export class AdminPlayerFormComponent implements OnInit {
   query = '';
   searched = false;
   matches: Match[] = [];
-  username = '';
-  password = '';
   firstName = '';
   lastName = '';
-  handicapIndex = 0;
+  handicapText = '0';
+  setupLink = '';
+  copied = false;
+  readonly formatIndex = formatHandicapIndex;
   fieldErrors: Record<string, string> = {};
   error = '';
   saving = false;
@@ -71,28 +75,39 @@ export class AdminPlayerFormComponent implements OnInit {
   async createPlayer(): Promise<void> {
     this.fieldErrors = {};
     this.error = '';
-    if (!this.username.trim()) this.fieldErrors['username'] = 'Pick a username';
-    if (this.password.length < 8) this.fieldErrors['password'] = 'Use at least 8 characters';
     if (!this.firstName.trim()) this.fieldErrors['firstName'] = 'First name is required';
     if (!this.lastName.trim()) this.fieldErrors['lastName'] = 'Last name is required';
-    if (Object.keys(this.fieldErrors).length > 0) return;
+    const handicapIndex = parseHandicapIndex(this.handicapText);
+    if (handicapIndex == null) this.fieldErrors['handicapIndex'] = 'Enter a handicap like 10.4 or +1.4';
+    if (handicapIndex == null || Object.keys(this.fieldErrors).length > 0) return;
 
     this.saving = true;
     try {
-      await this.api.put('league', {
+      const created = await this.api.put<{ token: string }>('league', {
         action: 'createPlayer',
         leagueId: this.leagueId,
-        username: this.username,
-        password: this.password,
         firstName: this.firstName,
         lastName: this.lastName,
-        handicapIndex: Number(this.handicapIndex),
+        handicapIndex,
       });
-      await this.router.navigate(this.backTo, { queryParams: { tab: 'players' } });
+      this.setupLink = `${location.origin}/welcome/${created.token}`;
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Could not create that player';
     } finally {
       this.saving = false;
     }
+  }
+
+  async copyLink(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.setupLink);
+      this.copied = true;
+    } catch {
+      this.copied = false;
+    }
+  }
+
+  done(): void {
+    void this.router.navigate(this.backTo, { queryParams: { tab: 'players' } });
   }
 }

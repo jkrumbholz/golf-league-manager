@@ -5,6 +5,7 @@ import {
   keepQuotaError,
   mergeGroupHoles,
   scramblePlayingHandicap,
+  individualPlayingHandicap,
   latestPlayedHole,
   scorecardHoles,
   scoreRound,
@@ -56,6 +57,14 @@ describe('nine hole handicap', () => {
     expect(strokes(short)).toBe(6);
     expect(strokes(full)).toBe(11);
   });
+
+  test('rounds a plus index the same way as a standard index and keeps the direction', () => {
+    expect(individualPlayingHandicap('stroke_play', 4.5, 18)).toBe(5);
+    expect(individualPlayingHandicap('stroke_play', -4.5, 18)).toBe(-5);
+    expect(individualPlayingHandicap('stroke_play', -4, 9)).toBe(-2);
+    expect(individualPlayingHandicap('stroke_play', -4, 9, 50)).toBe(-1);
+    expect(individualPlayingHandicap('stroke_play', 4, 9, 50)).toBe(1);
+  });
 });
 
 describe('stroke allocation', () => {
@@ -71,6 +80,141 @@ describe('stroke allocation', () => {
     expect(allocation.get(1)).toBe(0);
     expect(allocation.get(3)).toBe(-1);
     expect(allocation.get(2)).toBe(-1);
+  });
+
+  test('a plus stroke goes to the easiest hole on the card, not handicap number 9', () => {
+    const nine: HoleSetup[] = [
+      { sequence: 1, par: 4, strokeIndex: 11, displayHoleNumber: 1, defaultLadderOrder: 1 },
+      { sequence: 2, par: 4, strokeIndex: 5, displayHoleNumber: 2, defaultLadderOrder: 1 },
+      { sequence: 3, par: 4, strokeIndex: 17, displayHoleNumber: 3, defaultLadderOrder: 1 },
+      { sequence: 4, par: 4, strokeIndex: 3, displayHoleNumber: 4, defaultLadderOrder: 1 },
+      { sequence: 5, par: 4, strokeIndex: 9, displayHoleNumber: 5, defaultLadderOrder: 1 },
+      { sequence: 6, par: 4, strokeIndex: 1, displayHoleNumber: 6, defaultLadderOrder: 1 },
+      { sequence: 7, par: 4, strokeIndex: 15, displayHoleNumber: 7, defaultLadderOrder: 1 },
+      { sequence: 8, par: 4, strokeIndex: 7, displayHoleNumber: 8, defaultLadderOrder: 1 },
+      { sequence: 9, par: 4, strokeIndex: 13, displayHoleNumber: 9, defaultLadderOrder: 1 },
+    ];
+    const plusOne = strokeAllocation(-1, nine);
+    expect(plusOne.get(3)).toBe(-1);
+    expect([...plusOne.values()].filter(strokes => strokes < 0)).toEqual([-1]);
+
+    const plusTwo = strokeAllocation(-2, nine);
+    expect(plusTwo.get(3)).toBe(-1);
+    expect(plusTwo.get(7)).toBe(-1);
+    expect(plusTwo.get(9)).toBe(0);
+
+    const received = strokeAllocation(2, nine);
+    expect(received.get(6)).toBe(1);
+    expect(received.get(4)).toBe(1);
+  });
+});
+
+describe('plus handicap scoring', () => {
+  test('a stroke given back raises the hole net', () => {
+    const [player] = scoreRound(
+      'stroke_play',
+      holes,
+      ladder,
+      [{ userId: 1, displayName: 'Plus P', handicapIndex: -4, teamId: null }],
+      [],
+      holes.map(hole => ({ sequence: hole.sequence, userId: 1, teamId: null, gross: 4, kept: null }))
+    );
+    const bySequence = new Map(player.holes.map(hole => [hole.sequence, hole.lines[0].net]));
+    expect(bySequence.get(1)).toBe(4);
+    expect(bySequence.get(2)).toBe(5);
+    expect(bySequence.get(3)).toBe(5);
+    expect(player.total).toBe(14);
+  });
+});
+
+describe('tiebreaker', () => {
+  const card: HoleSetup[] = [
+    { sequence: 1, par: 4, strokeIndex: 7, displayHoleNumber: 1, defaultLadderOrder: 1 },
+    { sequence: 2, par: 4, strokeIndex: 3, displayHoleNumber: 2, defaultLadderOrder: 1 },
+    { sequence: 3, par: 4, strokeIndex: 9, displayHoleNumber: 3, defaultLadderOrder: 1 },
+    { sequence: 4, par: 4, strokeIndex: 1, displayHoleNumber: 4, defaultLadderOrder: 1 },
+    { sequence: 5, par: 4, strokeIndex: 5, displayHoleNumber: 5, defaultLadderOrder: 1 },
+    { sequence: 6, par: 4, strokeIndex: 8, displayHoleNumber: 6, defaultLadderOrder: 1 },
+    { sequence: 7, par: 4, strokeIndex: 2, displayHoleNumber: 7, defaultLadderOrder: 1 },
+    { sequence: 8, par: 4, strokeIndex: 6, displayHoleNumber: 8, defaultLadderOrder: 1 },
+    { sequence: 9, par: 4, strokeIndex: 4, displayHoleNumber: 9, defaultLadderOrder: 1 },
+  ];
+
+  function grosses(userId: number, overrides: Record<number, number>) {
+    return card.map(hole => ({
+      sequence: hole.sequence,
+      userId,
+      teamId: null,
+      gross: overrides[hole.sequence] ?? 4,
+      kept: null as boolean | null,
+    }));
+  }
+
+  test('uses handicap order when the last four and last three are tied', () => {
+    const players = [
+      { userId: 1, displayName: 'Mike', handicapIndex: 0, teamId: null },
+      { userId: 2, displayName: 'Jason', handicapIndex: 0, teamId: null },
+    ];
+    const rows = combineRounds([scoreRound('stroke_play', card, ladder.slice(0, 1), players, [], [
+      ...grosses(1, {}),
+      ...grosses(2, { 7: 3, 8: 5 }),
+    ])]);
+    expect(rows.map(row => row.name)).toEqual(['Jason', 'Mike']);
+    expect(rows.map(row => row.rank)).toEqual([1, 2]);
+    expect(rows[0].toPar).toBe(rows[1].toPar);
+    const steps = rows[0].tiebreaker?.steps ?? [];
+    expect(steps.map(step => step.criterion)).toEqual(['last_4_holes', 'last_3_holes', 'handicap_1', 'handicap_2']);
+    expect(steps[3].description).toBe('Handicap #2 — Hole 7');
+    expect(steps[3].result).toBe('split');
+    expect(steps[3].summary).toContain('Jason');
+  });
+
+  test('resolves a three-way tie one group at a time', () => {
+    const players = [
+      { userId: 1, displayName: 'Amy', handicapIndex: 0, teamId: null },
+      { userId: 2, displayName: 'Mia', handicapIndex: 0, teamId: null },
+      { userId: 3, displayName: 'Zoe', handicapIndex: 0, teamId: null },
+    ];
+    const rows = combineRounds([scoreRound('stroke_play', card, ladder.slice(0, 1), players, [], [
+      ...grosses(1, {}),
+      ...grosses(2, { 6: 5, 7: 3 }),
+      ...grosses(3, { 1: 5, 9: 3 }),
+    ])]);
+    expect(rows.map(row => row.name)).toEqual(['Zoe', 'Mia', 'Amy']);
+    expect(rows.map(row => row.rank)).toEqual([1, 2, 3]);
+    const steps = rows[0].tiebreaker?.steps ?? [];
+    expect(steps[0].criterion).toBe('last_4_holes');
+    expect(steps[0].summary).toContain('Zoe');
+    expect(steps[0].summary).toContain('Mia and Amy remain tied');
+    expect(steps[1].criterion).toBe('last_3_holes');
+    expect(steps[1].scores.map(score => score.name)).toEqual(['Mia', 'Amy']);
+    expect(steps[1].summary).toContain('Mia');
+  });
+
+  test('the last holes are the end of the nine being played, not always 6 through 9', () => {
+    const back = card.map(hole => ({ ...hole, displayHoleNumber: hole.sequence + 9 }));
+    const players = [
+      { userId: 1, displayName: 'Amy', handicapIndex: 0, teamId: null },
+      { userId: 2, displayName: 'Zoe', handicapIndex: 0, teamId: null },
+    ];
+    const posted = (userId: number, overrides: Record<number, number>) => back.map(hole => ({
+      sequence: hole.sequence,
+      userId,
+      teamId: null,
+      gross: overrides[hole.sequence] ?? 4,
+      kept: null as boolean | null,
+    }));
+    const rows = combineRounds([scoreRound('stroke_play', back, ladder.slice(0, 1), players, [], [
+      ...posted(1, {}),
+      ...posted(2, { 6: 5, 9: 3 }),
+    ])]);
+    expect(rows.map(row => row.name)).toEqual(['Zoe', 'Amy']);
+    const steps = rows[0].tiebreaker?.steps ?? [];
+    expect(steps.map(step => step.criterion)).toEqual(['last_4_holes', 'last_3_holes']);
+    expect(steps[0].description).toBe('Last 4 holes (15, 16, 17, 18)');
+    expect(steps[0].result).toBe('tie');
+    expect(steps[1].description).toBe('Last 3 holes (16, 17, 18)');
+    expect(steps[1].result).toBe('split');
   });
 });
 
@@ -204,6 +348,36 @@ describe('best ball and high ball', () => {
     const [high] = scoreRound('high_ball', holes.slice(0, 1), ladder, players, teams, grosses);
     expect(best.total).toBe(4);
     expect(high.total).toBe(6);
+  });
+});
+
+describe('low high both', () => {
+  test('uses each player handicap, then low net, high net, and both versus double par', () => {
+    const nine: HoleSetup[] = Array.from({ length: 9 }, (_, index) => ({
+      sequence: index + 1,
+      par: 4,
+      strokeIndex: index + 1,
+      displayHoleNumber: index + 1,
+      defaultLadderOrder: 1,
+    }));
+    const players = [
+      { userId: 1, displayName: 'Ann A', handicapIndex: 0, teamId: 10 },
+      { userId: 2, displayName: 'Bob B', handicapIndex: 2, teamId: 10 },
+    ];
+    const grosses = nine.flatMap(hole => [
+      { sequence: hole.sequence, userId: 1, teamId: null, gross: 4, kept: null as boolean | null },
+      { sequence: hole.sequence, userId: 2, teamId: null, gross: hole.sequence === 7 ? 5 : 4, kept: null as boolean | null },
+    ]);
+    const [team] = scoreRound('low_high_total', nine, ladder.slice(0, 1), players, [{ teamId: 10, name: 'Ann / Bob' }], grosses);
+    const card = scorecardHoles(team.holes);
+
+    expect(team.holes[0].lines.map(line => line.strokes)).toEqual([0, 1]);
+    expect(card.slice(0, 3).map(hole => hole.gross)).toEqual([3, 4, 4]);
+    expect(card.slice(3, 6).map(hole => hole.gross)).toEqual([4, 4, 4]);
+    expect(card[6]).toMatchObject({ gross: 9, relative: true, standing: 1 });
+    expect(card[7]).toMatchObject({ gross: 8, relative: true, standing: 0 });
+    expect(card[8]).toMatchObject({ gross: 8, relative: true, standing: 0 });
+    expect(team.toPar).toBe(0);
   });
 });
 
@@ -406,6 +580,7 @@ describe('leaderboard', () => {
       net: null as number | null,
       strokes: 0,
       kept: null,
+      strokeIndex: null,
       players: [],
     }));
     const back = holes.map(hole => ({ ...hole, gross: hole.hole >= 10 && hole.hole <= 12 ? 4 : null }));

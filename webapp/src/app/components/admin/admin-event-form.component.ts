@@ -19,6 +19,7 @@ export class AdminEventFormComponent implements OnInit {
   startDate = '';
   endDate = '';
   entryFee = 0;
+  handicapAllowance = 100;
   teamSize = 2;
   playersPickTeams = false;
   ctpEnabled = false;
@@ -59,6 +60,7 @@ export class AdminEventFormComponent implements OnInit {
         startDate: this.startDate,
         endDate: this.endDate || this.startDate,
         entryFee: Number(this.entryFee),
+        handicapAllowance: Number(this.handicapAllowance),
         teamSize: this.selectedFormat.teamSize ?? Number(this.teamSize),
         playersPickTeams: this.playersPickTeams,
         ctpEnabled: this.ctpEnabled,

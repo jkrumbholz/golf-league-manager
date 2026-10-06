@@ -5,15 +5,18 @@
 -- after 02_create_users.sql. Do not run this from the application.
 --
 -- Playing handicaps use Handicap Index directly because the platform API does
--- not store slope or course rating. A card of 9 holes or fewer uses half that
--- index, rounded. Scramble and alternate shot apply their percentage blends
--- to those 9-hole handicaps. An 18-hole card uses the full index.
+-- not store slope or course rating. A plus index is stored as a negative
+-- number and shown with a plus sign. A card of 9 holes or fewer uses half
+-- that index, rounded. An event allowance then scales the strokes. Scramble
+-- and alternate shot apply their percentage blends to those playing handicaps.
+-- An 18-hole card uses the full index before the allowance.
 -- Modified Tri-Play is not included. Payout rows are entered by hand.
 
 CREATE TABLE app_user (
     id                  SERIAL PRIMARY KEY,
-    username            TEXT NOT NULL UNIQUE,
-    password_hash       TEXT NOT NULL,
+    -- Null until the player opens their setup link and chooses a login.
+    username            TEXT UNIQUE,
+    password_hash       TEXT,
     first_name          TEXT NOT NULL,
     last_name           TEXT NOT NULL,
     display_name        TEXT NOT NULL,
@@ -30,6 +33,19 @@ CREATE TABLE user_session (
 );
 
 CREATE INDEX user_session_user_id_idx ON user_session(user_id);
+
+-- One-time links an organizer copies and sends. Setup chooses the first
+-- username and password. Reset replaces a forgotten password. Both expire.
+CREATE TABLE account_link (
+    token       TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    purpose     TEXT NOT NULL CHECK (purpose IN ('setup', 'reset')),
+    expires_at  TIMESTAMPTZ NOT NULL,
+    used_at     TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX account_link_user_id_idx ON account_link(user_id);
 
 CREATE TABLE league (
     id                  SERIAL PRIMARY KEY,
@@ -74,7 +90,8 @@ CREATE TABLE event (
                                 'vegas_up_and_back',
                                 'oceans_6',
                                 'scramble',
-                                'alternate_shot'
+                                'alternate_shot',
+                                'low_high_total'
                             )),
     course_configuration_id INTEGER,
     facility_id             INTEGER,
@@ -88,6 +105,8 @@ CREATE TABLE event (
     ctp_entry_fee           NUMERIC(10,2) NOT NULL DEFAULT 0,
     long_drive_enabled      BOOLEAN NOT NULL DEFAULT FALSE,
     long_drive_entry_fee    NUMERIC(10,2) NOT NULL DEFAULT 0,
+    handicap_allowance      NUMERIC(5,1) NOT NULL DEFAULT 100,
+    deleted_at              TIMESTAMPTZ,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

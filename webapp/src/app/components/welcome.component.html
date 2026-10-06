@@ -1,0 +1,48 @@
+<div class="screen">
+  <div class="screen-inner">
+    <header class="topbar">
+      <span></span>
+      <h1 class="topbar-title">{{ preview ? (setup ? 'Set up your login' : 'Reset password') : 'Account' }}</h1>
+      <span></span>
+    </header>
+
+    @if (done) {
+      <p class="page-note">
+        {{ setup ? 'Your login is ready.' : 'Your password is updated.' }}
+        Sign in with {{ setup ? 'the username you just chose' : preview?.username }}.
+      </p>
+      <a class="btn-primary" routerLink="/login">Sign in</a>
+    } @else if (preview) {
+      <p class="page-note">{{ preview.displayName }}</p>
+      <form class="form" (ngSubmit)="save()">
+        @if (setup) {
+          <label class="field">
+            <span class="field-label">Username</span>
+            <input name="username" autocapitalize="none" autocomplete="username" [(ngModel)]="username" />
+            @if (fieldErrors['username']) { <span class="field-error">{{ fieldErrors['username'] }}</span> }
+          </label>
+        } @else {
+          <p class="page-note">Username {{ preview.username }}</p>
+        }
+
+        <label class="field">
+          <span class="field-label">Password</span>
+          <input name="password" type="password" autocomplete="new-password" [(ngModel)]="password" />
+          @if (fieldErrors['password']) { <span class="field-error">{{ fieldErrors['password'] }}</span> }
+        </label>
+
+        <label class="field">
+          <span class="field-label">Confirm password</span>
+          <input name="confirm" type="password" autocomplete="new-password" [(ngModel)]="confirm" />
+          @if (fieldErrors['confirm']) { <span class="field-error">{{ fieldErrors['confirm'] }}</span> }
+        </label>
+
+        <button class="btn-primary" type="submit" [disabled]="saving">
+          {{ setup ? 'Create login' : 'Save password' }}
+        </button>
+      </form>
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

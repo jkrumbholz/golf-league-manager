@@ -70,6 +70,9 @@
                     }
                   </span>
                 }
+                @if (line.strokes < 0) {
+                  <span class="sc-give">{{ givenMarks(line.strokes) }}</span>
+                }
                 {{ line.gross ?? '--' }}
               </div>
               <button type="button" [disabled]="saving" (click)="bump(line, 1)">+</button>

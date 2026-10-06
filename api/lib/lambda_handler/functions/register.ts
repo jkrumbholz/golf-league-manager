@@ -15,7 +15,7 @@ export const handler: Handler = async (event: any) => handle(event, async (body)
   }
   if (password.length < 6) throw new HttpError('Use at least 6 characters for the password');
   if (!Number.isFinite(handicapIndex) || handicapIndex < -10 || handicapIndex > 54) {
-    throw new HttpError('Enter a handicap index from -10 to 54');
+    throw new HttpError('Enter a handicap from 0 to 54, or a plus index up to +10');
   }
 
   const displayName = defaultDisplayName(firstName, lastName);

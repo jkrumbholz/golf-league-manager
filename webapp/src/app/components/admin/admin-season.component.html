@@ -25,6 +25,8 @@
     }
 
     <button class="btn-primary" type="button" (click)="add()">Add event</button>
+    <a class="btn-quiet btn-wide" [routerLink]="['/admin/seasons', seasonId, 'archive']"
+       [queryParams]="{ name: seasonName, leagueId: leagueId }">Archive</a>
 
     @if (error) { <p class="error">{{ error }}</p> }
   </div>

@@ -36,6 +36,7 @@ export interface EventDetail {
   format: string;
   formatLabel: string;
   entryFee: number;
+  handicapAllowance: number;
   startDate: string;
   endDate: string;
   teamSize: number;

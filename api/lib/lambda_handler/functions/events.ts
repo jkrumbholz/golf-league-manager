@@ -9,6 +9,6 @@ export const handler: Handler = async (event: any) => handle(event, async (body)
   if (!seasonId) throw new HttpError('Season is required');
   return withClient(async (client) => {
     const user = await requireUser(client, body);
-    return listEvents(client, user, seasonId);
+    return listEvents(client, user, seasonId, body.archived === true);
   });
 });

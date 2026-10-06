@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { CourseNameService } from '../../services/course-name.service';
 import { Dashboard } from '../../models/dashboard';
@@ -17,9 +17,11 @@ export class AdminEventComponent implements OnInit {
   eventId = 0;
   dashboard: Dashboard | null = null;
   error = '';
+  busy = false;
 
   constructor(
     private route: ActivatedRoute,
+    private router: Router,
     private api: ApiService,
     private courseNames: CourseNameService
   ) {}
@@ -72,5 +74,20 @@ export class AdminEventComponent implements OnInit {
     const players = this.dashboard.registrations;
     const paid = players.filter(player => player.paid).length;
     return `${players.length} signed up · ${paid} paid`;
+  }
+
+  async archive(): Promise<void> {
+    if (!this.dashboard || this.busy) return;
+    const name = this.dashboard.event.name;
+    if (!window.confirm(`Archive ${name}? It leaves this season. You can delete it from Archive.`)) return;
+    this.busy = true;
+    this.error = '';
+    try {
+      await this.api.put('event', { action: 'archive', id: this.eventId });
+      await this.router.navigate(this.backTo);
+    } catch (error: unknown) {
+      this.error = error instanceof Error ? error.message : 'Could not archive this event';
+      this.busy = false;
+    }
   }
 }

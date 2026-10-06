@@ -17,6 +17,7 @@ import {
   TeamSetup,
   combineRounds,
   fixedTeamSize,
+  individualPlayingHandicap,
   isKnownFormat,
   isTeamFormat,
   isTeamGrossFormat,
@@ -48,6 +49,7 @@ interface EventRow {
   ctpEntryFee: number;
   longDriveEnabled: boolean;
   longDriveEntryFee: number;
+  handicapAllowance: number;
 }
 
 interface RoundRow {
@@ -165,6 +167,7 @@ export async function listLeagues(client: Client, userId: number) {
           FROM event e
           JOIN season s ON s.id = e.season_id
           WHERE s.league_id = l.id
+            AND e.deleted_at IS NULL
             AND CURRENT_DATE BETWEEN e.start_date AND e.end_date
           ORDER BY e.start_date, e.id
           LIMIT 1
@@ -182,8 +185,10 @@ export async function listLeagues(client: Client, userId: number) {
 export async function saveLeague(client: Client, user: AuthUser, body: any) {
   if (body.action === 'searchPlayers') return searchLeaguePlayers(client, user, body);
   if (body.action === 'addPlayer') return addLeaguePlayer(client, user, body);
+  if (body.action === 'removePlayer') return removeLeaguePlayer(client, user, body);
   if (body.action === 'createPlayer') return createLeaguePlayer(client, user, body);
   if (body.action === 'updatePlayer') return updateLeaguePlayer(client, user, body);
+  if (body.action === 'accountLink') return createAccountLink(client, user, body);
   if (body.action === 'setLogo') return setLeagueLogo(client, user, body);
 
   const name = requireText(body.name, 'League name');
@@ -248,15 +253,23 @@ async function searchLeaguePlayers(client: Client, user: AuthUser, body: any) {
   const pattern = `%${query.replace(/[%_]/g, '')}%`;
   const result = await client.query(
     `
-      SELECT u.id AS "userId", u.username, u.display_name AS "displayName",
+      SELECT u.id AS "userId", u.username,
+             u.first_name AS "firstName", u.last_name AS "lastName",
+             u.display_name AS "displayName",
              u.handicap_index::float AS "handicapIndex"
       FROM app_user u
-      WHERE (u.username ILIKE $2 OR u.display_name ILIKE $2)
+      WHERE (
+          u.username ILIKE $2
+          OR u.display_name ILIKE $2
+          OR u.first_name ILIKE $2
+          OR u.last_name ILIKE $2
+          OR (u.first_name || ' ' || u.last_name) ILIKE $2
+        )
         AND NOT EXISTS (
           SELECT 1 FROM league_member m
           WHERE m.league_id = $1 AND m.user_id = u.id
         )
-      ORDER BY u.display_name
+      ORDER BY u.last_name, u.first_name
       LIMIT 15
     `,
     [leagueId, pattern]
@@ -282,40 +295,163 @@ async function addLeaguePlayer(client: Client, user: AuthUser, body: any) {
   return { leagueId };
 }
 
+async function removeLeaguePlayer(client: Client, user: AuthUser, body: any) {
+  const leagueId = Number(body.leagueId);
+  await assertOrganizer(client, leagueId, user.id);
+  const userId = Number(body.userId);
+  if (!userId) throw new HttpError('Choose a player');
+  const member = await client.query(
+    `SELECT role FROM league_member WHERE league_id = $1 AND user_id = $2`,
+    [leagueId, userId]
+  );
+  if (member.rows.length === 0) throw new HttpError('That player is not in this league', 404);
+  if (member.rows[0].role === 'organizer') {
+    const organizers = await client.query(
+      `SELECT COUNT(*)::int AS count FROM league_member WHERE league_id = $1 AND role = 'organizer'`,
+      [leagueId]
+    );
+    if (Number(organizers.rows[0].count) <= 1) {
+      throw new HttpError('Keep at least one organizer on this league');
+    }
+  }
+  await client.query(
+    `DELETE FROM league_member WHERE league_id = $1 AND user_id = $2`,
+    [leagueId, userId]
+  );
+  return { leagueId };
+}
+
 async function createLeaguePlayer(client: Client, user: AuthUser, body: any) {
   const leagueId = Number(body.leagueId);
   await assertOrganizer(client, leagueId, user.id);
-  const username = String(body.username || '').trim().toLowerCase();
-  const password = String(body.password || '');
   const firstName = String(body.firstName || '').trim();
   const lastName = String(body.lastName || '').trim();
   const handicapIndex = Number(body.handicapIndex ?? 0);
-  if (!username || !password || !firstName || !lastName) {
-    throw new HttpError('Username, password, first name, and last name are required');
-  }
-  if (password.length < 6) throw new HttpError('Use at least 6 characters for the password');
+  if (!firstName || !lastName) throw new HttpError('First name and last name are required');
   if (!Number.isFinite(handicapIndex) || handicapIndex < -10 || handicapIndex > 54) {
-    throw new HttpError('Enter a handicap index from -10 to 54');
+    throw new HttpError('Enter a handicap from 0 to 54, or a plus index up to +10');
   }
 
+  const inserted = await client.query(
+    `
+      INSERT INTO app_user (first_name, last_name, display_name, handicap_index)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id
+    `,
+    [firstName, lastName, defaultDisplayName(firstName, lastName), handicapIndex]
+  );
+  const userId = Number(inserted.rows[0].id);
+  await client.query(
+    `INSERT INTO league_member (league_id, user_id, role) VALUES ($1, $2, 'player')`,
+    [leagueId, userId]
+  );
+  const link = await issueAccountLink(client, userId, 'setup');
+  return { leagueId, userId, ...link };
+}
+
+async function createAccountLink(client: Client, user: AuthUser, body: any) {
+  const leagueId = Number(body.leagueId);
+  await assertOrganizer(client, leagueId, user.id);
+  const userId = Number(body.userId);
+  if (!userId) throw new HttpError('Choose a player');
+  const member = await client.query(
+    `SELECT u.username FROM league_member m JOIN app_user u ON u.id = m.user_id WHERE m.league_id = $1 AND m.user_id = $2`,
+    [leagueId, userId]
+  );
+  if (member.rows.length === 0) throw new HttpError('That player is not in this league', 404);
+  const purpose = body.purpose === 'reset' ? 'reset' : 'setup';
+  const hasLogin = member.rows[0].username != null;
+  if (purpose === 'setup' && hasLogin) {
+    throw new HttpError('This player already has a login. Send a password reset link.');
+  }
+  if (purpose === 'reset' && !hasLogin) {
+    throw new HttpError('This player has not chosen a login yet. Send the setup link.');
+  }
+  return issueAccountLink(client, userId, purpose);
+}
+
+async function issueAccountLink(client: Client, userId: number, purpose: 'setup' | 'reset') {
   try {
+    await client.query(
+      `UPDATE account_link SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL`,
+      [userId]
+    );
+    const token = newToken();
     const inserted = await client.query(
       `
-        INSERT INTO app_user (username, password_hash, first_name, last_name, display_name, handicap_index)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id
+        INSERT INTO account_link (token, user_id, purpose, expires_at)
+        VALUES ($1, $2, $3, NOW() + INTERVAL '3 days')
+        RETURNING expires_at::text AS "expiresAt"
       `,
-      [username, await hashPassword(password), firstName, lastName, defaultDisplayName(firstName, lastName), handicapIndex]
+      [token, userId, purpose]
     );
-    await client.query(
-      `INSERT INTO league_member (league_id, user_id, role) VALUES ($1, $2, 'player')`,
-      [leagueId, inserted.rows[0].id]
-    );
-    return { leagueId, userId: inserted.rows[0].id };
+    return { token, purpose, expiresAt: inserted.rows[0].expiresAt };
   } catch (error: any) {
-    if (error?.code === '23505') throw new HttpError('That username is already taken. Search for them and add the existing account.');
+    if (error?.code === '42P01') {
+      throw new HttpError('Setup links are not ready yet. Run database/11_account_link.sql, then try again.');
+    }
     throw error;
   }
+}
+
+export async function previewAccountLink(client: Client, token: string) {
+  const link = await loadAccountLink(client, token);
+  return {
+    purpose: link.purpose,
+    displayName: link.displayName,
+    username: link.purpose === 'reset' ? link.username : null,
+  };
+}
+
+export async function claimAccountLink(client: Client, body: any) {
+  const token = String(body.token || '');
+  const password = String(body.password || '');
+  if (password.length < 8) throw new HttpError('Use at least 8 characters for the password');
+  const link = await loadAccountLink(client, token);
+  const passwordHash = await hashPassword(password);
+
+  if (link.purpose === 'setup') {
+    const username = String(body.username || '').trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,40}$/.test(username)) {
+      throw new HttpError('Use 3 to 40 letters, numbers, dots, or dashes for the username');
+    }
+    try {
+      await client.query(
+        `UPDATE app_user SET username = $2, password_hash = $3 WHERE id = $1`,
+        [link.userId, username, passwordHash]
+      );
+    } catch (error: any) {
+      if (error?.code === '23505') throw new HttpError('That username is already taken');
+      throw error;
+    }
+  } else {
+    await client.query(`UPDATE app_user SET password_hash = $2 WHERE id = $1`, [link.userId, passwordHash]);
+    await client.query(`DELETE FROM user_session WHERE user_id = $1`, [link.userId]);
+  }
+
+  await client.query(`UPDATE account_link SET used_at = NOW() WHERE token = $1`, [token]);
+  return { ok: true };
+}
+
+async function loadAccountLink(client: Client, token: string) {
+  if (!token) throw new HttpError('This link is not valid', 404);
+  const found = await client.query(
+    `
+      SELECT l.purpose, l.expires_at AS "expiresAt", l.used_at AS "usedAt",
+             u.id AS "userId", u.username, u.display_name AS "displayName"
+      FROM account_link l
+      JOIN app_user u ON u.id = l.user_id
+      WHERE l.token = $1
+    `,
+    [token]
+  );
+  const link = found.rows[0];
+  if (!link) throw new HttpError('This link is not valid. Ask your organizer for a new one.', 404);
+  if (link.usedAt) throw new HttpError('This link has already been used. Ask your organizer for a new one.', 404);
+  if (new Date(link.expiresAt).getTime() <= Date.now()) {
+    throw new HttpError('This link has expired. Ask your organizer for a new one.', 404);
+  }
+  return link;
 }
 
 async function updateLeaguePlayer(client: Client, user: AuthUser, body: any) {
@@ -335,7 +471,7 @@ async function updateLeaguePlayer(client: Client, user: AuthUser, body: any) {
   const handicapIndex = Number(body.handicapIndex);
   if (!firstName || !lastName || !displayName) throw new HttpError('Name is required');
   if (!Number.isFinite(handicapIndex) || handicapIndex < -10 || handicapIndex > 54) {
-    throw new HttpError('Enter a handicap index from -10 to 54');
+    throw new HttpError('Enter a handicap from 0 to 54, or a plus index up to +10');
   }
 
   await client.query(
@@ -356,7 +492,7 @@ export async function listSeasons(client: Client, user: AuthUser, leagueId: numb
       SELECT s.id, s.league_id AS "leagueId", s.name,
              s.start_date::text AS "startDate",
              s.end_date::text AS "endDate",
-             (SELECT COUNT(*) FROM event e WHERE e.season_id = s.id)::int AS "eventCount",
+             (SELECT COUNT(*) FROM event e WHERE e.season_id = s.id AND e.deleted_at IS NULL)::int AS "eventCount",
              (CURRENT_DATE BETWEEN s.start_date AND s.end_date) AS "isActive"
       FROM season s
       WHERE s.league_id = $1
@@ -374,7 +510,7 @@ export async function listSeasons(client: Client, user: AuthUser, leagueId: numb
   );
   const members = await client.query(
     `
-      SELECT u.id AS "userId", u.first_name AS "firstName", u.last_name AS "lastName",
+      SELECT u.id AS "userId", u.username, u.first_name AS "firstName", u.last_name AS "lastName",
              u.display_name AS "displayName", m.role,
              u.handicap_index::float AS "handicapIndex"
       FROM league_member m
@@ -425,10 +561,12 @@ export async function saveSeason(client: Client, user: AuthUser, body: any) {
   return { id: inserted.rows[0].id };
 }
 
-export async function listEvents(client: Client, user: AuthUser, seasonId: number) {
+export async function listEvents(client: Client, user: AuthUser, seasonId: number, archived = false) {
   const season = await client.query(`SELECT league_id AS "leagueId" FROM season WHERE id = $1`, [seasonId]);
   if (season.rows.length === 0) throw new HttpError('Season not found', 404);
-  await assertLeagueMember(client, Number(season.rows[0].leagueId), user.id);
+  const leagueId = Number(season.rows[0].leagueId);
+  if (archived) await assertOrganizer(client, leagueId, user.id);
+  else await assertLeagueMember(client, leagueId, user.id);
   const events = await client.query(
     `
       SELECT e.id, e.season_id AS "seasonId", e.name, e.format,
@@ -437,6 +575,7 @@ export async function listEvents(client: Client, user: AuthUser, seasonId: numbe
              e.entry_fee::float AS "entryFee",
              e.start_date::text AS "startDate",
              e.end_date::text AS "endDate",
+             e.deleted_at::text AS "deletedAt",
              e.signup_token AS "signupToken",
              e.facility_id AS "facilityId",
              e.course_configuration_id AS "courseConfigurationId",
@@ -459,7 +598,8 @@ export async function listEvents(client: Client, user: AuthUser, seasonId: numbe
       FROM event e
       JOIN season s ON s.id = e.season_id
       WHERE e.season_id = $1
-      ORDER BY e.start_date, e.id
+        AND e.deleted_at IS ${archived ? 'NOT NULL' : 'NULL'}
+      ORDER BY ${archived ? 'e.deleted_at DESC, e.id DESC' : 'e.start_date, e.id'}
     `,
     [seasonId]
   );
@@ -497,6 +637,7 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
     ctpEntryFee: asNumber(body.ctpEntryFee, 0),
     longDriveEnabled: Boolean(body.longDriveEnabled),
     longDriveEntryFee: asNumber(body.longDriveEntryFee, 0),
+    handicapAllowance: Math.min(100, Math.max(0, asNumber(body.handicapAllowance, 100) ?? 100)),
   };
 
   if (body.id) {
@@ -518,7 +659,8 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
             ctp_enabled = $11,
             ctp_entry_fee = $12,
             long_drive_enabled = $13,
-            long_drive_entry_fee = $14
+            long_drive_entry_fee = $14,
+            handicap_allowance = $15
         WHERE id = $1
       `,
       [
@@ -536,6 +678,7 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
         values.ctpEntryFee,
         values.longDriveEnabled,
         values.longDriveEntryFee,
+        values.handicapAllowance,
       ]
     );
     return { id: eventId };
@@ -551,9 +694,9 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
       INSERT INTO event (
         season_id, name, format, course_configuration_id, facility_id, entry_fee,
         start_date, end_date, players_pick_teams, team_size, signup_token,
-        ctp_enabled, ctp_entry_fee, long_drive_enabled, long_drive_entry_fee
+        ctp_enabled, ctp_entry_fee, long_drive_enabled, long_drive_entry_fee, handicap_allowance
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING id
     `,
     [
@@ -572,6 +715,7 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
       values.ctpEntryFee,
       values.longDriveEnabled,
       values.longDriveEntryFee,
+      values.handicapAllowance,
     ]
   );
   const eventId = inserted.rows[0].id;
@@ -582,6 +726,36 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
     `,
     [eventId, startDate, values.courseConfigurationId]
   );
+  return { id: eventId };
+}
+
+export async function archiveEvent(client: Client, user: AuthUser, eventId: number) {
+  const leagueId = await leagueIdForEvent(client, eventId);
+  await assertOrganizer(client, leagueId, user.id);
+  const updated = await client.query(
+    `UPDATE event SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+    [eventId]
+  );
+  if (updated.rows.length === 0) throw new HttpError('Event not found', 404);
+  return { id: eventId };
+}
+
+export async function hardDeleteEvent(client: Client, user: AuthUser, eventId: number) {
+  const leagueId = await leagueIdForEvent(client, eventId);
+  await assertOrganizer(client, leagueId, user.id);
+  const found = await client.query(`SELECT deleted_at AS "deletedAt" FROM event WHERE id = $1`, [eventId]);
+  if (found.rows.length === 0) throw new HttpError('Event not found', 404);
+  if (!found.rows[0].deletedAt) throw new HttpError('Archive the event before deleting it');
+
+  await client.query(
+    `
+      UPDATE round_hole
+      SET default_tee_set_id = NULL
+      WHERE round_id IN (SELECT id FROM round WHERE event_id = $1)
+    `,
+    [eventId]
+  );
+  await client.query(`DELETE FROM event WHERE id = $1`, [eventId]);
   return { id: eventId };
 }
 
@@ -1217,7 +1391,10 @@ export async function saveSideGame(client: Client, user: AuthUser, body: any) {
 }
 
 async function loadBundleBySignup(client: Client, signupToken: string): Promise<Bundle> {
-  const found = await client.query(`SELECT id FROM event WHERE signup_token = $1`, [signupToken]);
+  const found = await client.query(
+    `SELECT id FROM event WHERE signup_token = $1 AND deleted_at IS NULL`,
+    [signupToken]
+  );
   if (found.rows.length === 0) throw new HttpError('Signup link not found', 404);
   return loadBundle(client, Number(found.rows[0].id));
 }
@@ -1243,11 +1420,13 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
         e.ctp_enabled AS "ctpEnabled",
         e.ctp_entry_fee::float AS "ctpEntryFee",
         e.long_drive_enabled AS "longDriveEnabled",
-        e.long_drive_entry_fee::float AS "longDriveEntryFee"
+        e.long_drive_entry_fee::float AS "longDriveEntryFee",
+        e.handicap_allowance::float AS "handicapAllowance"
       FROM event e
       JOIN season s ON s.id = e.season_id
       JOIN league l ON l.id = s.league_id
       WHERE e.id = $1
+        AND e.deleted_at IS NULL
     `,
     [eventId]
   );
@@ -1476,7 +1655,8 @@ function leaderboardFor(bundle: Bundle): LeaderboardRow[] {
       ladderFor(bundle, roundId),
       players,
       teams,
-      bundle.scores.filter(score => Number(score.roundId) === roundId)
+      bundle.scores.filter(score => Number(score.roundId) === roundId),
+      bundle.event.handicapAllowance
     );
   });
   if (rounds.length === 0) return [];
@@ -1499,7 +1679,8 @@ function scorecardFromBundle(
     ladderFor(bundle, roundId),
     players,
     teams,
-    bundle.scores.filter(score => Number(score.roundId) === roundId)
+    bundle.scores.filter(score => Number(score.roundId) === roundId),
+    bundle.event.handicapAllowance
   );
   const round = bundle.rounds.find(item => Number(item.id) === roundId);
   const base = {
@@ -1627,21 +1808,38 @@ async function assertNotGrouped(client: Client, eventId: number, kind: 'user' | 
 }
 
 function formatHandicap(index: number): string {
-  const rounded = Math.round(Number(index));
-  if (!Number.isFinite(rounded)) return '';
-  if (rounded < 0) return `(+${Math.abs(rounded)})`;
-  return `(${rounded})`;
+  const value = Number(index);
+  if (!Number.isFinite(value)) return '';
+  const magnitude = Math.round(Math.abs(value) * 10) / 10;
+  return value < 0 ? `(+${magnitude})` : `(${magnitude})`;
+}
+
+function eventHoleCount(bundle: Bundle): number {
+  const roundId = Number(bundle.rounds[0]?.id);
+  const count = bundle.holes.filter(hole => Number(hole.roundId) === roundId).length;
+  return count > 0 ? count : 18;
+}
+
+function strokesLabel(bundle: Bundle, index: number): string {
+  const allowance = Number(bundle.event.handicapAllowance);
+  const strokes = individualPlayingHandicap(
+    bundle.event.format,
+    index,
+    eventHoleCount(bundle),
+    Number.isFinite(allowance) ? allowance : 100
+  );
+  return formatHandicap(strokes);
 }
 
 function nameWithHandicap(bundle: Bundle, row: { kind: string; competitorId: number; name: string }): string {
   if (row.kind === 'team') {
     const team = bundle.teams.find(item => item.teamId === row.competitorId);
     if (!team || team.members.length === 0) return row.name;
-    return team.members.map(member => `${member.displayName} ${formatHandicap(member.handicapIndex)}`.trim()).join(' / ');
+    return team.members.map(member => `${member.displayName} ${strokesLabel(bundle, member.handicapIndex)}`.trim()).join(' / ');
   }
   const player = bundle.registrations.find(item => Number(item.userId) === row.competitorId);
   if (!player) return row.name;
-  const handicap = formatHandicap(player.handicapIndex);
+  const handicap = strokesLabel(bundle, player.handicapIndex);
   return handicap ? `${row.name} ${handicap}` : row.name;
 }
 

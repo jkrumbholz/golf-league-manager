@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../services/api.service';
 import { AuthService, SessionUser } from '../services/auth.service';
 import { ImageService } from '../services/image.service';
+import { formatHandicapIndex, parseHandicapIndex } from '../models/handicap';
 import { ShellComponent } from '../ui/shell.component';
 
 @Component({
@@ -15,7 +16,7 @@ export class AccountComponent {
   firstName = '';
   lastName = '';
   displayName = '';
-  handicapIndex = 0;
+  handicapText = '';
   profilePictureUrl = '';
   error = '';
   saved = false;
@@ -28,19 +29,24 @@ export class AccountComponent {
     this.firstName = user.firstName;
     this.lastName = user.lastName;
     this.displayName = user.displayName;
-    this.handicapIndex = user.handicapIndex;
+    this.handicapText = formatHandicapIndex(user.handicapIndex);
     this.profilePictureUrl = user.profilePictureUrl || '';
   }
 
   async save(): Promise<void> {
     this.error = '';
     this.saved = false;
+    const handicapIndex = parseHandicapIndex(this.handicapText);
+    if (handicapIndex == null) {
+      this.error = 'Enter a handicap like 10.4 or +1.4';
+      return;
+    }
     try {
       const result = await this.api.put<{ user: SessionUser }>('user', {
         firstName: this.firstName,
         lastName: this.lastName,
         displayName: this.displayName,
-        handicapIndex: Number(this.handicapIndex),
+        handicapIndex,
         profilePictureUrl: this.profilePictureUrl,
       });
       this.auth.replaceUser(result.user);

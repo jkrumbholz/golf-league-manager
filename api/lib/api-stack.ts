@@ -19,6 +19,7 @@ export class ApiStack extends cdk.Stack {
     const apiUtil = new LambdaApiUtil(this);
 
     apiUtil.createApi(api, env, 'golfleague-login', 'login.ts', 'login', ['POST']);
+    apiUtil.createApi(api, env, 'golfleague-accountlink', 'accountlink.ts', 'accountlink', ['POST']);
     apiUtil.createApi(api, env, 'golfleague-register', 'register.ts', 'register', ['POST']);
     apiUtil.createApi(api, env, 'golfleague-logout', 'logout.ts', 'logout', ['POST']);
     apiUtil.createApi(api, env, 'golfleague-user', 'user.ts', 'user', ['POST', 'PUT']);

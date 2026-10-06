@@ -17,6 +17,7 @@ export const FORMATS: FormatOption[] = [
   { id: 'vegas_up_and_back', label: 'Vegas Up & Back', team: true, teamSize: 2, teamGross: false, runningTee: true },
   { id: 'scramble', label: 'Scramble', team: true, teamSize: null, teamGross: true, runningTee: false },
   { id: 'alternate_shot', label: 'Alternate Shot', team: true, teamSize: 2, teamGross: true, runningTee: false },
+  { id: 'low_high_total', label: 'Low / High / Combo', team: true, teamSize: 2, teamGross: false, runningTee: false },
 ];
 
 export function formatOption(id: string): FormatOption {

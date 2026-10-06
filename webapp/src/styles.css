@@ -625,6 +625,55 @@ button.lb-row.lb-expandable { cursor: pointer; }
   white-space: normal;
 }
 
+.lb-tie-link {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  cursor: pointer;
+}
+
+.modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(5, 12, 32, 0.72);
+}
+
+.modal {
+  width: min(420px, 100%);
+  max-height: min(80vh, 640px);
+  overflow: auto;
+  padding: 20px 18px 16px;
+  border-radius: 16px;
+  background: var(--surface-to);
+  color: var(--text);
+}
+
+.modal h2 { margin: 0 0 8px; font-size: 22px; }
+.modal p { margin: 0 0 8px; }
+.modal-label {
+  margin-top: 14px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.modal-score { font-size: 16px; font-weight: 700; }
+.modal-summary { color: var(--text-muted); font-weight: 700; }
+.modal-winner { color: var(--text); }
+.modal .btn-secondary { width: 100%; margin-top: 12px; }
+
 .lb-keeps {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -810,6 +859,16 @@ a.sc-cell {
   height: 5px;
   border-radius: 50%;
   background: var(--accent);
+}
+
+.sc-give {
+  position: absolute;
+  top: 2px;
+  right: 5px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .sc-muted { color: var(--text-muted); font-weight: 700; }

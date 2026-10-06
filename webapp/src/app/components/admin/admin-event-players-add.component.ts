@@ -1,5 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { Router } from '@angular/router';
+import { formatHandicapIndex } from '../../models/handicap';
 import { ShellComponent } from '../../ui/shell.component';
 import { AdminEventScreen } from './admin-event-screen';
 
@@ -12,6 +13,7 @@ import { AdminEventScreen } from './admin-event-screen';
 export class AdminEventPlayersAddComponent extends AdminEventScreen implements OnInit {
   private router = inject(Router);
   selected: number[] = [];
+  readonly formatIndex = formatHandicapIndex;
 
   async ngOnInit(): Promise<void> {
     await this.load();

@@ -1,0 +1,25 @@
+<div class="screen">
+  <div class="screen-inner">
+    <app-shell nav="back" title="Archive" [backTo]="backTo" [queryParams]="backQuery"></app-shell>
+
+    <p class="page-note">Archived events are hidden from the season and the league. Delete removes the event and everything recorded for it.</p>
+
+    @if (events.length === 0) {
+      <p class="page-note">Nothing archived.</p>
+    } @else {
+      <div class="card">
+        @for (event of events; track event.id) {
+          <div class="row row-static">
+            <span class="row-body">
+              <span class="row-title">{{ event.name }}</span>
+              <span class="row-meta">{{ meta(event) }}</span>
+            </span>
+            <button class="btn-quiet btn-danger" type="button" [disabled]="busyId === event.id" (click)="remove(event)">Delete</button>
+          </div>
+        }
+      </div>
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

@@ -29,7 +29,20 @@ interface PlayedHole {
   net: number | null;
   strokes: number;
   kept: boolean | null;
+  relative?: boolean;
   players?: CardPlayer[];
+}
+
+interface Tiebreaker {
+  standing: number;
+  steps: Array<{
+    criterion: string;
+    description: string;
+    scores: Array<{ competitorId: number; name: string; score: number }>;
+    result: 'tie' | 'split';
+    summary: string;
+  }>;
+  order: Array<{ competitorId: number; name: string; rank: number }>;
 }
 
 interface BoardRow {
@@ -48,6 +61,7 @@ interface BoardRow {
   memberUserIds: number[];
   keeps?: KeepProgress[] | null;
   card?: PlayedHole[];
+  tiebreaker?: Tiebreaker | null;
 }
 
 interface Board {
@@ -80,6 +94,7 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
   board: Board | null = null;
   error = '';
   private expandedId: number | null = null;
+  tieRow: BoardRow | null = null;
   private timer = 0;
 
   constructor(
@@ -211,12 +226,43 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     return this.playedHoles(row).reduce((sum, hole) => sum + (hole.gross ?? 0), 0);
   }
 
+  teamScore(hole: PlayedHole): string {
+    if (hole.gross == null) return '–';
+    return String(hole.gross);
+  }
+
+  teamColumnTotal(row: BoardRow): string {
+    if (this.playedHoles(row).some(hole => hole.relative)) return this.scoreLabel(row);
+    return String(this.teamTotal(row));
+  }
+
   isOpen(row: BoardRow): boolean {
     return this.expandedId === row.competitorId;
   }
 
   toggle(row: BoardRow): void {
     this.expandedId = this.isOpen(row) ? null : row.competitorId;
+  }
+
+  showTiebreaker(row: BoardRow): void {
+    this.tieRow = row;
+  }
+
+  closeTiebreaker(): void {
+    this.tieRow = null;
+  }
+
+  tieNames(row: BoardRow): string {
+    const names = row.tiebreaker?.order.map(item => item.name) ?? [];
+    if (names.length < 2) return names[0] ?? '';
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+  }
+
+  tieIntro(row: BoardRow): string {
+    const count = row.tiebreaker?.order.length ?? 0;
+    const verb = count === 2 ? 'both finished' : 'all finished';
+    return `${this.tieNames(row)} ${verb} at ${this.scoreLabel(row)}.`;
   }
 
   isMe(row: BoardRow): boolean {

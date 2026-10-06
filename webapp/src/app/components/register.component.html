@@ -25,7 +25,8 @@
 
       <label class="field">
         <span class="field-label">Handicap index</span>
-        <input name="handicapIndex" type="number" inputmode="decimal" step="0.1" [(ngModel)]="handicapIndex" />
+        <input name="handicapIndex" inputmode="decimal" [(ngModel)]="handicapText" placeholder="10.4 or +1.4" />
+        <span class="field-hint">A plus index, like +1.4, gives strokes back.</span>
       </label>
 
       @if (error) { <p class="error">{{ error }}</p> }

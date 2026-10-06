@@ -18,7 +18,6 @@
 
       @if (!auth.isAuthenticated()) {
         <a class="btn-primary" [routerLink]="loginLink()">Sign in to sign up</a>
-        <p class="page-note">No account yet? The sign-in page has a link to create one. Come back to this link afterwards.</p>
       } @else {
         <form class="form" (ngSubmit)="signup()">
           @if (event.ctpEnabled || event.longDriveEnabled) {

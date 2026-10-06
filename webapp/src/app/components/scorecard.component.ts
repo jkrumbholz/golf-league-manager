@@ -97,9 +97,14 @@ export class ScorecardComponent implements OnInit {
     return Array.from({ length: count > 0 ? count : 0 }, (_, index) => index);
   }
 
+  givenMarks(hole: HoleView, key: string): string {
+    const strokes = this.line(hole, key)?.strokes ?? 0;
+    return strokes < 0 ? '+'.repeat(Math.abs(strokes)) : '';
+  }
+
   showsNet(hole: HoleView, key: string): boolean {
     const line = this.line(hole, key);
-    return !!line && line.gross != null && line.kept !== false && line.strokes > 0;
+    return !!line && line.gross != null && line.kept !== false && line.strokes !== 0;
   }
 
   discarded(hole: HoleView, key: string): boolean {
@@ -124,7 +129,7 @@ export class ScorecardComponent implements OnInit {
     let anyStrokes = false;
     for (const hole of this.card.holes) {
       const line = this.line(hole, key);
-      if (line && line.gross != null && line.kept !== false && line.strokes > 0) anyStrokes = true;
+      if (line && line.gross != null && line.kept !== false && line.strokes !== 0) anyStrokes = true;
     }
     return anyStrokes ? this.sum(key, line => line.net) : null;
   }

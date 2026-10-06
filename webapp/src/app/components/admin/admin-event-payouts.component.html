@@ -3,7 +3,8 @@
     <app-shell nav="back" title="Payouts" [backTo]="backTo"></app-shell>
 
     @if (dashboard) {
-      <p class="section-label">Pot {{ pot }} · paid out {{ paidOut }} · left {{ pot - paidOut }}</p>
+      <p class="section-label">Pot {{ money(pot) }} · paid out {{ money(paidOut) }} · left {{ money(pot - paidOut) }}</p>
+      <p class="page-note">{{ playerCount }} players × {{ money(entryFee) }} entry</p>
 
       @if (dashboard.payouts.length === 0) {
         <p class="page-note">No payouts recorded.</p>

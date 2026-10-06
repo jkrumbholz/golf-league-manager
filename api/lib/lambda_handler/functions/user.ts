@@ -16,7 +16,7 @@ export const handler: Handler = async (event: any) => handle(event, async (body)
     const profilePictureUrl = body.profilePictureUrl?.trim?.() || null;
     if (!firstName || !lastName || !displayName) throw new HttpError('Name is required');
     if (!Number.isFinite(handicapIndex) || handicapIndex < -10 || handicapIndex > 54) {
-      throw new HttpError('Enter a handicap index from -10 to 54');
+      throw new HttpError('Enter a handicap from 0 to 54, or a plus index up to +10');
     }
 
     const updated = await client.query(

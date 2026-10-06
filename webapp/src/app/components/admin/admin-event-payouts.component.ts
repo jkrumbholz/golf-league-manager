@@ -1,7 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { Payout } from '../../models/dashboard';
-import { PlacePayout, collectedTotal, entryPurse, money as formatMoney, placeName as formatPlace, suggestPlacePayouts, suggestionNote as formatNote } from '../../models/payouts';
+import { PlacePayout, entryPurse, money as formatMoney, placeName as formatPlace, suggestPlacePayouts, suggestionNote as formatNote } from '../../models/payouts';
 import { formatOption } from '../../models/formats';
 import { ShellComponent } from '../../ui/shell.component';
 import { AdminEventScreen } from './admin-event-screen';
@@ -19,9 +19,17 @@ export class AdminEventPayoutsComponent extends AdminEventScreen implements OnIn
     await this.load();
   }
 
+  get playerCount(): number {
+    return this.dashboard?.registrations.length ?? 0;
+  }
+
+  get entryFee(): number {
+    return Number(this.dashboard?.event.entryFee) || 0;
+  }
+
+  /** Every signed-up player pays the event entry fee, paid or not. */
   get pot(): number {
-    if (!this.dashboard) return 0;
-    return collectedTotal(this.dashboard.registrations, this.dashboard.event);
+    return entryPurse(this.dashboard?.registrations ?? [], this.entryFee);
   }
 
   get paidOut(): number {
@@ -29,8 +37,7 @@ export class AdminEventPayoutsComponent extends AdminEventScreen implements OnIn
   }
 
   get placePot(): number {
-    if (!this.dashboard) return 0;
-    return entryPurse(this.dashboard.registrations, this.dashboard.event.entryFee);
+    return this.pot;
   }
 
   get stake(): number {

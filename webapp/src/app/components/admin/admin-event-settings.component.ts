@@ -30,6 +30,7 @@ export class AdminEventSettingsComponent extends AdminEventScreen implements OnI
         startDate: event.startDate,
         endDate: event.endDate,
         entryFee: Number(event.entryFee),
+        handicapAllowance: Number(event.handicapAllowance ?? 100),
         teamSize: event.teamSize,
         playersPickTeams: event.playersPickTeams,
         ctpEnabled: event.ctpEnabled,

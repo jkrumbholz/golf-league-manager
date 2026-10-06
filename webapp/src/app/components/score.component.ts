@@ -291,6 +291,10 @@ export class ScoreComponent implements OnInit {
     return Array.from({ length: count }, (_, index) => index);
   }
 
+  givenMarks(count: number): string {
+    return '+'.repeat(Math.abs(count));
+  }
+
   bump(line: HoleLine, delta: number): void {
     const par = this.hole?.par ?? 4;
     const next = line.gross == null ? par : line.gross + delta;
