@@ -189,6 +189,7 @@ export async function saveLeague(client: Client, user: AuthUser, body: any) {
   if (body.action === 'createPlayer') return createLeaguePlayer(client, user, body);
   if (body.action === 'updatePlayer') return updateLeaguePlayer(client, user, body);
   if (body.action === 'accountLink') return createAccountLink(client, user, body);
+  if (body.action === 'addToLeague') return addGuestToLeague(client, user, body);
   if (body.action === 'setLogo') return setLeagueLogo(client, user, body);
 
   const name = requireText(body.name, 'League name');
@@ -319,6 +320,37 @@ async function removeLeaguePlayer(client: Client, user: AuthUser, body: any) {
     [leagueId, userId]
   );
   return { leagueId };
+}
+
+async function addGuestToLeague(client: Client, user: AuthUser, body: any) {
+  const leagueId = Number(body.leagueId);
+  await assertOrganizer(client, leagueId, user.id);
+  const userId = Number(body.userId);
+  if (!userId) throw new HttpError('Choose a player');
+  const played = await client.query(
+    `
+      SELECT u.username
+      FROM event_registration r
+      JOIN event e ON e.id = r.event_id
+      JOIN season s ON s.id = e.season_id
+      JOIN app_user u ON u.id = r.user_id
+      WHERE r.user_id = $1 AND s.league_id = $2
+      LIMIT 1
+    `,
+    [userId, leagueId]
+  );
+  if (played.rows.length === 0) throw new HttpError('That guest has not played an event in this league', 404);
+  await client.query(
+    `
+      INSERT INTO league_member (league_id, user_id, role)
+      VALUES ($1, $2, 'player')
+      ON CONFLICT (league_id, user_id) DO NOTHING
+    `,
+    [leagueId, userId]
+  );
+  if (played.rows[0].username != null) return { leagueId, userId, token: null };
+  const link = await issueAccountLink(client, userId, 'setup');
+  return { leagueId, userId, token: link.token };
 }
 
 async function createLeaguePlayer(client: Client, user: AuthUser, body: any) {
@@ -1043,6 +1075,14 @@ export async function saveGroup(client: Client, user: AuthUser, body: any) {
   const action = String(body.action || 'create');
   const teamFormat = isTeamFormat(bundle.event.format);
 
+  if (action === 'swapSlots') return swapGroupSlots(client, bundle, eventId, body);
+  if (action === 'swapPlayers') return swapGroupPlayers(client, bundle, eventId, body);
+  if (action === 'movePlayer') return moveGroupPlayer(client, bundle, eventId, body);
+  if (action === 'moveTeam') return moveGroupTeam(client, bundle, eventId, body);
+  if (action === 'swapTeams') return swapGroupTeams(client, bundle, eventId, body);
+  if (action === 'dropPlayer') return dropEventPlayer(client, bundle, eventId, body);
+  if (action === 'addGuest') return addEventGuest(client, eventId, body);
+
   if (action === 'create') {
     const teeTime = parseTeeTime(body.teeTime);
     const startingHole = parseStartingHole(body.startingHole, bundle);
@@ -1115,6 +1155,275 @@ export async function saveGroup(client: Client, user: AuthUser, body: any) {
   }
 
   throw new HttpError('Unknown group action');
+}
+
+async function swapGroupSlots(client: Client, bundle: Bundle, eventId: number, body: any) {
+  const firstId = Number(body.groupId);
+  const secondId = Number(body.otherGroupId);
+  if (!firstId || !secondId || firstId === secondId) throw new HttpError('Choose two tee times');
+  const first = bundle.groups.find(group => group.id === firstId);
+  const second = bundle.groups.find(group => group.id === secondId);
+  if (!first || !second) throw new HttpError('Group not found', 404);
+  const firstTime = String(first.teeTime || '').slice(0, 5);
+  const secondTime = String(second.teeTime || '').slice(0, 5);
+  await client.query('BEGIN');
+  try {
+    await client.query(
+      `UPDATE tee_group SET tee_time = '23:59:59', starting_hole = 99 WHERE id = $1 AND event_id = $2`,
+      [firstId, eventId]
+    );
+    await client.query(
+      `UPDATE tee_group SET tee_time = $2::time, starting_hole = $3 WHERE id = $1 AND event_id = $4`,
+      [secondId, firstTime, first.startingHole, eventId]
+    );
+    await client.query(
+      `UPDATE tee_group SET tee_time = $2::time, starting_hole = $3 WHERE id = $1 AND event_id = $4`,
+      [firstId, secondTime, second.startingHole, eventId]
+    );
+    await client.query('COMMIT');
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    if (error?.code === '23505') throw new HttpError('Another group already starts on that hole at this tee time');
+    throw error;
+  }
+  return { eventId };
+}
+
+async function swapGroupPlayers(client: Client, bundle: Bundle, eventId: number, body: any) {
+  const firstId = Number(body.userId);
+  const secondId = Number(body.otherUserId);
+  if (!firstId || !secondId || firstId === secondId) throw new HttpError('Choose two different players');
+  for (const userId of [firstId, secondId]) {
+    if (!bundle.registrations.some(row => row.userId === userId)) throw new HttpError('That player is not signed up', 404);
+  }
+  await client.query('BEGIN');
+  try {
+    if (isTeamFormat(bundle.event.format)) {
+      const seats = await client.query(
+        `
+          SELECT tm.team_id AS "teamId", tm.user_id AS "userId"
+          FROM team_member tm
+          JOIN team t ON t.id = tm.team_id
+          WHERE t.event_id = $1 AND tm.user_id IN ($2, $3)
+        `,
+        [eventId, firstId, secondId]
+      );
+      if (seats.rows.length === 0) throw new HttpError('Neither player is on a team');
+      if (seats.rows.length === 2 && Number(seats.rows[0].teamId) === Number(seats.rows[1].teamId)) {
+        await client.query('COMMIT');
+        return { eventId };
+      }
+      await client.query(
+        `DELETE FROM team_member WHERE user_id IN ($1, $2) AND team_id IN (SELECT id FROM team WHERE event_id = $3)`,
+        [firstId, secondId, eventId]
+      );
+      for (const seat of seats.rows) {
+        const arriving = Number(seat.userId) === firstId ? secondId : firstId;
+        await client.query(`INSERT INTO team_member (team_id, user_id) VALUES ($1, $2)`, [seat.teamId, arriving]);
+      }
+      for (const teamId of new Set(seats.rows.map(row => Number(row.teamId)))) {
+        await refreshTeamName(client, teamId);
+      }
+    } else {
+      const seats = await client.query(
+        `
+          SELECT m.tee_group_id AS "groupId", m.user_id AS "userId"
+          FROM tee_group_member m
+          JOIN tee_group g ON g.id = m.tee_group_id
+          WHERE g.event_id = $1 AND m.user_id IN ($2, $3)
+        `,
+        [eventId, firstId, secondId]
+      );
+      if (seats.rows.length === 0) throw new HttpError('Neither player is in a group');
+      if (seats.rows.length === 2 && Number(seats.rows[0].groupId) === Number(seats.rows[1].groupId)) {
+        await client.query('COMMIT');
+        return { eventId };
+      }
+      await client.query(
+        `DELETE FROM tee_group_member WHERE user_id IN ($1, $2) AND tee_group_id IN (SELECT id FROM tee_group WHERE event_id = $3)`,
+        [firstId, secondId, eventId]
+      );
+      for (const seat of seats.rows) {
+        const arriving = Number(seat.userId) === firstId ? secondId : firstId;
+        await client.query(`INSERT INTO tee_group_member (tee_group_id, user_id) VALUES ($1, $2)`, [seat.groupId, arriving]);
+      }
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+  return { eventId };
+}
+
+async function moveGroupPlayer(client: Client, bundle: Bundle, eventId: number, body: any) {
+  const userId = Number(body.userId);
+  if (!bundle.registrations.some(row => row.userId === userId)) throw new HttpError('That player is not signed up', 404);
+  if (isTeamFormat(bundle.event.format)) {
+    const teamId = body.teamId == null || body.teamId === '' ? null : Number(body.teamId);
+    const current = bundle.teams.filter(team => team.members.some(member => member.userId === userId)).map(team => team.teamId);
+    if (teamId != null) {
+      const team = bundle.teams.find(item => item.teamId === teamId);
+      if (!team) throw new HttpError('Team not found', 404);
+      if (team.members.some(member => member.userId === userId)) return { eventId };
+      const size = Number(bundle.event.teamSize) || 1;
+      if (team.members.length >= size) throw new HttpError('That team is full');
+    }
+    await client.query(
+      `DELETE FROM team_member WHERE user_id = $1 AND team_id IN (SELECT id FROM team WHERE event_id = $2)`,
+      [userId, eventId]
+    );
+    if (teamId != null) {
+      await client.query(`INSERT INTO team_member (team_id, user_id) VALUES ($1, $2)`, [teamId, userId]);
+    }
+    for (const id of new Set([...current, ...(teamId == null ? [] : [teamId])])) {
+      const left = await client.query(`SELECT COUNT(*)::int AS count FROM team_member WHERE team_id = $1`, [id]);
+      if (Number(left.rows[0].count) === 0) await client.query(`DELETE FROM team WHERE id = $1`, [id]);
+      else await refreshTeamName(client, id);
+    }
+    return { eventId };
+  }
+  const groupId = body.groupId == null || body.groupId === '' ? null : Number(body.groupId);
+  if (groupId != null) {
+    const group = bundle.groups.find(item => item.id === groupId);
+    if (!group) throw new HttpError('Group not found', 404);
+    if (group.members.some(member => member.userId === userId)) return { eventId, groupId };
+    assertGroupRoom(bundle, group, 1);
+  }
+  await client.query(
+    `DELETE FROM tee_group_member WHERE user_id = $1 AND tee_group_id IN (SELECT id FROM tee_group WHERE event_id = $2)`,
+    [userId, eventId]
+  );
+  if (groupId != null) {
+    await client.query(`INSERT INTO tee_group_member (tee_group_id, user_id) VALUES ($1, $2)`, [groupId, userId]);
+  }
+  return { eventId, groupId };
+}
+
+async function moveGroupTeam(client: Client, bundle: Bundle, eventId: number, body: any) {
+  if (!isTeamFormat(bundle.event.format)) throw new HttpError('Add each player to the tee time');
+  const teamId = Number(body.teamId);
+  if (!bundle.teams.some(team => team.teamId === teamId)) throw new HttpError('Team not found', 404);
+  const groupId = body.groupId == null || body.groupId === '' ? null : Number(body.groupId);
+  if (groupId == null) {
+    await client.query(
+      `DELETE FROM tee_group_member WHERE team_id = $1 AND tee_group_id IN (SELECT id FROM tee_group WHERE event_id = $2)`,
+      [teamId, eventId]
+    );
+    return { eventId };
+  }
+  const group = bundle.groups.find(item => item.id === groupId);
+  if (!group) throw new HttpError('Group not found', 404);
+  if (group.members.some(member => member.teamId === teamId)) return { eventId, groupId };
+  assertGroupRoom(bundle, group, Number(bundle.event.teamSize) || 1);
+  await client.query(
+    `DELETE FROM tee_group_member WHERE team_id = $1 AND tee_group_id IN (SELECT id FROM tee_group WHERE event_id = $2)`,
+    [teamId, eventId]
+  );
+  await client.query(`INSERT INTO tee_group_member (tee_group_id, team_id) VALUES ($1, $2)`, [groupId, teamId]);
+  return { eventId, groupId };
+}
+
+async function swapGroupTeams(client: Client, bundle: Bundle, eventId: number, body: any) {
+  if (!isTeamFormat(bundle.event.format)) throw new HttpError('Add each player to the tee time');
+  const firstId = Number(body.teamId);
+  const secondId = Number(body.otherTeamId);
+  if (!firstId || !secondId || firstId === secondId) throw new HttpError('Choose two different teams');
+  for (const teamId of [firstId, secondId]) {
+    if (!bundle.teams.some(team => team.teamId === teamId)) throw new HttpError('Team not found', 404);
+  }
+  await client.query('BEGIN');
+  try {
+    const seats = await client.query(
+      `
+        SELECT m.tee_group_id AS "groupId", m.team_id AS "teamId"
+        FROM tee_group_member m
+        JOIN tee_group g ON g.id = m.tee_group_id
+        WHERE g.event_id = $1 AND m.team_id IN ($2, $3)
+      `,
+      [eventId, firstId, secondId]
+    );
+    if (seats.rows.length === 0) throw new HttpError('Neither team is in a group');
+    if (seats.rows.length === 2 && Number(seats.rows[0].groupId) === Number(seats.rows[1].groupId)) {
+      await client.query('COMMIT');
+      return { eventId };
+    }
+    await client.query(
+      `DELETE FROM tee_group_member WHERE team_id IN ($1, $2) AND tee_group_id IN (SELECT id FROM tee_group WHERE event_id = $3)`,
+      [firstId, secondId, eventId]
+    );
+    for (const seat of seats.rows) {
+      const arriving = Number(seat.teamId) === firstId ? secondId : firstId;
+      await client.query(`INSERT INTO tee_group_member (tee_group_id, team_id) VALUES ($1, $2)`, [seat.groupId, arriving]);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+  return { eventId };
+}
+
+async function dropEventPlayer(client: Client, bundle: Bundle, eventId: number, body: any) {
+  const userId = Number(body.userId);
+  if (!bundle.registrations.some(row => row.userId === userId)) throw new HttpError('That player is not signed up', 404);
+  const teams = await client.query(
+    `
+      SELECT tm.team_id AS "teamId"
+      FROM team_member tm
+      JOIN team t ON t.id = tm.team_id
+      WHERE t.event_id = $1 AND tm.user_id = $2
+    `,
+    [eventId, userId]
+  );
+  await client.query(
+    `
+      DELETE FROM score
+      WHERE user_id = $1
+        AND round_id IN (SELECT id FROM round WHERE event_id = $2)
+    `,
+    [userId, eventId]
+  );
+  await client.query(
+    `DELETE FROM team_member WHERE user_id = $1 AND team_id IN (SELECT id FROM team WHERE event_id = $2)`,
+    [userId, eventId]
+  );
+  await client.query(
+    `DELETE FROM tee_group_member WHERE user_id = $1 AND tee_group_id IN (SELECT id FROM tee_group WHERE event_id = $2)`,
+    [userId, eventId]
+  );
+  for (const teamId of teams.rows.map(row => Number(row.teamId))) {
+    const left = await client.query(`SELECT COUNT(*)::int AS count FROM team_member WHERE team_id = $1`, [teamId]);
+    if (Number(left.rows[0].count) === 0) await client.query(`DELETE FROM team WHERE id = $1`, [teamId]);
+    else await refreshTeamName(client, teamId);
+  }
+  await client.query(`DELETE FROM event_registration WHERE event_id = $1 AND user_id = $2`, [eventId, userId]);
+  return { eventId };
+}
+
+async function addEventGuest(client: Client, eventId: number, body: any) {
+  const firstName = String(body.firstName || '').trim();
+  const lastName = String(body.lastName || '').trim();
+  const raw = body.handicapIndex;
+  const handicapIndex = raw === undefined || raw === null || String(raw).trim() === '' ? 0 : Number(raw);
+  if (!firstName || !lastName) throw new HttpError('First name and last name are required');
+  if (!Number.isFinite(handicapIndex) || handicapIndex < -10 || handicapIndex > 54) {
+    throw new HttpError('Enter a handicap from 0 to 54, or a plus index up to +10');
+  }
+  const inserted = await client.query(
+    `
+      INSERT INTO app_user (first_name, last_name, display_name, handicap_index)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id
+    `,
+    [firstName, lastName, defaultDisplayName(firstName, lastName), handicapIndex]
+  );
+  const userId = Number(inserted.rows[0].id);
+  await client.query(
+    `INSERT INTO event_registration (event_id, user_id, handicap_index) VALUES ($1, $2, $3)`,
+    [eventId, userId, handicapIndex]
+  );
+  return { eventId, userId };
 }
 
 export async function saveScores(client: Client, user: AuthUser, body: any) {

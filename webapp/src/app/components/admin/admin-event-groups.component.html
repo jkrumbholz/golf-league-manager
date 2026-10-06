@@ -1,75 +1,123 @@
-<div class="screen">
+<div class="screen" [class.sheet-open]="selection">
   <div class="screen-inner">
-    <app-shell nav="back" title="Groups" [backTo]="backTo"></app-shell>
+    <app-shell nav="back" title="Tee sheet" [backTo]="backTo"></app-shell>
 
     @if (dashboard) {
-      <p class="page-note">Each group starts on one hole, with up to four players. A 4-player scramble team takes the whole group. Groups can share a tee time when they start on different holes.</p>
+      <p class="page-note">
+        @if (teamFormat) {
+          Tap a team, then another team, to swap their places. Tap a tee time with room to move a team there.
+        } @else {
+          Tap a name, then tap where they should go. Tap a tee time, then another tee time, to trade those times.
+        }
+      </p>
+
+      <p class="section-label">Bench</p>
+      <div class="card sheet-block">
+        @if (benchPlayers.length === 0 && benchTeams.length === 0) {
+          <p class="page-note">{{ teamFormat ? 'Every team has a tee time.' : 'Everyone is in a group.' }}</p>
+        }
+        <div class="sheet-chips">
+          @for (player of benchPlayers; track player.userId) {
+            <button class="sheet-chip" type="button" [class.sheet-chip-on]="pickedPlayer(player.userId)" [disabled]="busy" (click)="tapPlayer(player.userId, player.displayName)">
+              {{ player.displayName }}
+            </button>
+          }
+          @for (team of benchTeams; track team.teamId) {
+            <button class="sheet-chip" type="button" [class.sheet-chip-on]="pickedTeam(team.teamId)" [disabled]="busy" (click)="tapTeam(team)">
+              {{ team.name }}
+            </button>
+          }
+        </div>
+        @if (!teamFormat && !addingGuest) {
+          <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="addingGuest = true">Add guest</button>
+        } @else if (!teamFormat) {
+          <form class="form sheet-guest" (ngSubmit)="addGuest()">
+            <label class="field">
+              <span class="field-label">First name</span>
+              <input [(ngModel)]="guestFirst" name="guestFirst" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span class="field-label">Last name</span>
+              <input [(ngModel)]="guestLast" name="guestLast" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span class="field-label">Index</span>
+              <input [(ngModel)]="guestIndex" name="guestIndex" inputmode="decimal" placeholder="Blank is 0" autocomplete="off" />
+            </label>
+            <button class="btn-primary" type="submit" [disabled]="busy">Add to bench</button>
+            <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="addingGuest = false">Cancel</button>
+          </form>
+        }
+      </div>
 
       @if (groups.length === 0) {
         <p class="page-note">No tee times yet.</p>
-      } @else {
-        <div class="card">
-          @for (group of groups; track group.groupId) {
-            <div class="row row-static">
-              <span class="row-body">
-                <label class="field">
-                  <span class="field-label">Tee time</span>
-                  <input type="time" [value]="group.teeTime" (change)="setTime(group, $event)" />
-                </label>
-                <label class="field">
-                  <span class="field-label">Starting hole</span>
-                  <input type="number" inputmode="numeric" min="1" max="36" [value]="group.startingHole" (change)="setHole(group, $event)" />
-                </label>
-                <span class="row-meta">{{ slots(group) }} of 4</span>
-                <span class="inline-actions">
-                  @for (member of group.members; track memberKey(member)) {
-                    <button class="btn-secondary" type="button" [disabled]="busy" (click)="removeMember(group, member)">
-                      {{ member.displayName }} &#10005;
-                    </button>
-                  }
-                  <button class="btn-secondary" type="button" [disabled]="busy" (click)="removeGroup(group.groupId)">Delete</button>
-                </span>
-              </span>
-              @if (!isFull(group.groupId)) {
-                <button class="add-button" type="button" (click)="targetGroupId = group.groupId">
-                  {{ targetGroupId === group.groupId ? 'Picking' : 'Add to' }}
-                </button>
+      }
+
+      @for (group of groups; track group.groupId) {
+        <div class="card sheet-block">
+          <button class="sheet-slot" type="button" [class.sheet-chip-on]="pickedSlot(group.groupId)" [disabled]="busy" (click)="tapSlot(group)">
+            {{ slotLabel(group) }}
+          </button>
+          <div class="sheet-times">
+            <label class="field">
+              <span class="field-label">Tee time</span>
+              <input type="time" [value]="group.teeTime" [disabled]="busy" (change)="setTime(group, $event)" />
+            </label>
+            <label class="field">
+              <span class="field-label">Starting hole</span>
+              <input type="number" min="1" max="36" [value]="group.startingHole" [disabled]="busy" (change)="setHole(group, $event)" />
+            </label>
+          </div>
+          <div class="sheet-chips">
+            @if (teamFormat) {
+              @for (member of group.members; track member.teamId) {
+                @if (teamOf(member.teamId); as team) {
+                  <button class="sheet-chip" type="button" [class.sheet-chip-on]="pickedTeam(team.teamId)" [disabled]="busy" (click)="tapTeam(team)">
+                    {{ team.name }}
+                  </button>
+                }
               }
-            </div>
-          }
+              @if (slots(group) + teamSize <= 4) {
+                <button class="sheet-chip sheet-chip-open" type="button" [disabled]="busy || selection?.kind !== 'team'" (click)="tapSlot(group)">Open</button>
+              }
+            } @else {
+              @for (member of group.members; track member.userId) {
+                @if (member.userId != null) {
+                  <button class="sheet-chip" type="button" [class.sheet-chip-on]="pickedPlayer(member.userId)" [disabled]="busy" (click)="tapPlayer(member.userId, member.displayName)">
+                    {{ member.displayName }}
+                  </button>
+                }
+              }
+              @if (slots(group) < 4) {
+                <button class="sheet-chip sheet-chip-open" type="button" [disabled]="busy || selection?.kind !== 'player'" (click)="tapSlot(group)">Open</button>
+              }
+            }
+          </div>
+          <button class="btn-quiet btn-danger btn-wide" type="button" [disabled]="busy" (click)="removeGroup(group.groupId)">Delete tee time</button>
         </div>
       }
 
-      <button class="btn-primary" type="button" (click)="add()">Add group</button>
-
-      @if (teamFormat && dashboard.teams.length === 0) {
-        <p class="page-note">Set up teams first, then add each team to a tee time.</p>
-      } @else if (hasUnassigned && targetGroupId !== null && !isFull(targetGroupId)) {
-        <p class="section-label">{{ teamFormat ? 'Tap a team to add it' : 'Tap a player to add them' }}</p>
-        <div class="card">
-          @if (teamFormat) {
-            @for (team of unassignedTeams; track team.teamId) {
-              <button class="row" type="button" [disabled]="busy" (click)="place(team.teamId)">
-                <span class="row-body"><span class="row-title">{{ team.name }}</span></span>
-                <span class="chevron">&#8250;</span>
-              </button>
-            }
-          } @else {
-            @for (player of unassignedPlayers; track player.userId) {
-              <button class="row" type="button" [disabled]="busy" (click)="place(player.userId)">
-                <span class="row-body"><span class="row-title">{{ player.displayName }}</span></span>
-                <span class="chevron">&#8250;</span>
-              </button>
-            }
-          }
-        </div>
-      } @else if (hasUnassigned && groups.length > 0) {
-        <p class="page-note">Choose Add to on a tee time, then pick who is in it.</p>
-      } @else if (groups.length > 0 && (teamFormat ? dashboard.teams.length > 0 : dashboard.registrations.length > 0)) {
-        <p class="page-note">Everyone signed up is in a group.</p>
-      }
+      <button class="btn-primary" type="button" (click)="add()">Add tee time</button>
     }
 
     @if (error) { <p class="error">{{ error }}</p> }
+
+    @if (selection) {
+      <div class="sheet-bar">
+        <p (click)="selection = null">{{ barText }}</p>
+        <div class="sheet-bar-actions">
+          @if (selection.kind === 'player') {
+            <button class="btn-danger" type="button" [disabled]="busy" (click)="drop()">Drop</button>
+          }
+          @if (canBench) {
+            <button class="btn-secondary" type="button" [disabled]="busy" (click)="toBench()">
+              {{ selection.kind === 'team' ? 'Off tee time' : 'Bench' }}
+            </button>
+          }
+          <button class="btn-secondary" type="button" [disabled]="busy" (click)="selection = null">Cancel</button>
+        </div>
+      </div>
+    }
   </div>
 </div>

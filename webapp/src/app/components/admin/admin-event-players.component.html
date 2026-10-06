@@ -15,6 +15,7 @@
                 <span class="row-title">{{ player.displayName }}</span>
                 <span class="row-meta">
                   {{ formatIndex(player.handicapIndex) }} index
+                  @if (isGuest(player)) { · Guest }
                   @if (staleIndex(player)) {
                     · profile {{ formatIndex(player.profileHandicapIndex) }}
                   }
@@ -30,10 +31,23 @@
                 @if (dashboard.event.longDriveEnabled) {
                   <button class="pill" type="button" [class.pill-muted]="!player.longDrivePaid" [disabled]="busy" (click)="toggleLongDrive(player)">Long Drive</button>
                 }
+                @if (isGuest(player)) {
+                  <button class="pill" type="button" [disabled]="busy" (click)="addToLeague(player)">Add to league</button>
+                }
               </span>
             </div>
           }
         </div>
+      }
+
+      @if (setupName) {
+        <p class="page-note link-note">
+          {{ setupName }} is on the league.
+          @if (setupLink) {
+            {{ copied ? 'Setup link copied.' : 'Copy this setup link.' }}
+            {{ setupLink }}
+          }
+        </p>
       }
 
       <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="refreshIndexes()">Refresh indexes</button>

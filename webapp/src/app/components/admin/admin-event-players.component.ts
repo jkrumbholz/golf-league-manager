@@ -15,6 +15,9 @@ export class AdminEventPlayersComponent extends AdminEventScreen implements OnIn
   private router = inject(Router);
 
   notice = '';
+  setupLink = '';
+  setupName = '';
+  copied = false;
   readonly formatIndex = formatHandicapIndex;
 
   async ngOnInit(): Promise<void> {
@@ -66,5 +69,32 @@ export class AdminEventPlayersComponent extends AdminEventScreen implements OnIn
 
   add(): void {
     void this.router.navigate(['/admin/events', this.eventId, 'players', 'add']);
+  }
+
+  isGuest(player: Registration): boolean {
+    return !(this.dashboard?.leagueMembers ?? []).some(member => member.userId === player.userId);
+  }
+
+  async addToLeague(player: Registration): Promise<void> {
+    const leagueId = this.dashboard?.event.leagueId;
+    if (!leagueId) return;
+    await this.run(async () => {
+      const result = await this.api.put<{ token: string | null }>('league', {
+        action: 'addToLeague',
+        leagueId,
+        userId: player.userId,
+      });
+      this.setupName = player.displayName;
+      this.copied = false;
+      this.setupLink = result.token ? `${location.origin}/welcome/${result.token}` : '';
+      if (this.setupLink) {
+        try {
+          await navigator.clipboard.writeText(this.setupLink);
+          this.copied = true;
+        } catch {
+          this.copied = false;
+        }
+      }
+    });
   }
 }
