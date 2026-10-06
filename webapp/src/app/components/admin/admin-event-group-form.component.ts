@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ShellComponent } from '../../ui/shell.component';
@@ -10,11 +10,28 @@ import { AdminEventScreen } from './admin-event-screen';
   imports: [FormsModule, ShellComponent],
   templateUrl: './admin-event-group-form.component.html',
 })
-export class AdminEventGroupFormComponent extends AdminEventScreen {
+export class AdminEventGroupFormComponent extends AdminEventScreen implements OnInit {
   private router = inject(Router);
   teeTime = '';
-  startingHole: number | null = 1;
+  startingHole: number | null = null;
   fieldErrors: Record<string, string> = {};
+
+  async ngOnInit(): Promise<void> {
+    await this.load();
+    this.startingHole = this.courseStart();
+  }
+
+  /** First hole of the event's course, using the number printed on the card. */
+  private courseStart(): number {
+    const roundId = this.dashboard?.rounds[0]?.id;
+    const holes = (this.dashboard?.holes ?? [])
+      .filter(hole => roundId == null || hole.roundId === roundId)
+      .slice()
+      .sort((a, b) => a.sequence - b.sequence);
+    const first = holes[0];
+    if (!first) return 1;
+    return first.displayHoleNumber || first.sequence || 1;
+  }
 
   override get backTo(): unknown[] {
     return ['/admin/events', this.eventId, 'groups'];

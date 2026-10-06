@@ -81,5 +81,5 @@ export interface Dashboard {
     thru: number;
   }>;
   sideGames: { closestToPinWinnerUserId: number | null; longDriveWinnerUserId: number | null };
-  holes: Array<{ roundId: number }>;
+  holes: Array<{ roundId: number; sequence: number; displayHoleNumber: number | null }>;
 }
