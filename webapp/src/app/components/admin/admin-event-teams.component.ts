@@ -45,6 +45,14 @@ export class AdminEventTeamsComponent extends AdminEventScreen implements OnInit
     }));
   }
 
+  async refreshNames(): Promise<void> {
+    if (!window.confirm('Rebuild every team name from the players\' current display names?')) return;
+    await this.run(() => this.api.put('team', {
+      action: 'refreshNames',
+      eventId: this.eventId,
+    }));
+  }
+
   async removeTeam(teamId: number): Promise<void> {
     if (this.targetTeamId === teamId) this.targetTeamId = null;
     await this.run(() => this.api.put('team', {

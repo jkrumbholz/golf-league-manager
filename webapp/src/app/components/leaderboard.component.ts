@@ -111,11 +111,10 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     this.eventId = Number(this.route.snapshot.paramMap.get('eventId'));
     this.broadcast = this.route.snapshot.data['broadcast'] === true;
     void this.refresh();
-    this.timer = window.setInterval(() => void this.refresh(true), this.config.leaderboardRefreshMs());
   }
 
   ngOnDestroy(): void {
-    window.clearInterval(this.timer);
+    this.stopRefreshing();
   }
 
   holeLabel(row: BoardRow): string {
@@ -156,7 +155,7 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
 
   headline(): string {
     if (!this.board) return 'Leaderboard';
-    return `${this.board.eventName} · ${this.board.formatLabel}`;
+    return this.board.eventName;
   }
 
   /** "White/Blue · Thru 12 · Live" under the header. */
@@ -290,8 +289,25 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
       await this.courseNames.ensureConfigurations(board.facilityId);
       this.board = board;
       this.error = '';
+      this.syncRefresh();
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Leaderboard unavailable';
+      this.syncRefresh();
     }
+  }
+
+  /** Keep polling while scoring is open. A tab left open stops once a refresh says it is closed. */
+  private syncRefresh(): void {
+    if (this.board?.scoringEnabled === false) {
+      this.stopRefreshing();
+      return;
+    }
+    if (this.timer) return;
+    this.timer = window.setInterval(() => void this.refresh(true), this.config.leaderboardRefreshMs());
+  }
+
+  private stopRefreshing(): void {
+    window.clearInterval(this.timer);
+    this.timer = 0;
   }
 }

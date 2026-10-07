@@ -1,135 +1,227 @@
-<div class="screen">
+<div class="screen score-screen" [class.picking]="picking" [class.has-ticker]="!!card && !picking && !otherGroup && tickerOn">
   <div class="screen-inner">
-    <app-shell nav="back" action="none" [title]="title" [backTo]="backTo"></app-shell>
-
-    @if (card) {
-      @if (hole && hole.lines.length > 0) {
-        <div class="hole-nav score-links">
-          <button class="btn-secondary" type="button" [disabled]="saving" (click)="openScorecard()">Scorecard</button>
-          <button class="btn-secondary" type="button" [disabled]="saving" (click)="openLeaderboard()">Leaderboard</button>
-        </div>
+    @if (picking && card) {
+      <header class="score-head">
+        <button class="icon-button" type="button" (click)="picking = false" aria-label="Close">&#10005;</button>
+        <h1>Score a group</h1>
+        <span></span>
+      </header>
+      <p class="page-note">{{ card.eventName }} · {{ card.formatLabel }} · Admin</p>
+      @for (group of card.groups; track group.groupId) {
+        <button class="group-pick" type="button" (click)="pickGroup(group.groupId)">
+          <span class="group-pick-body">
+            <span class="group-pick-title">{{ pickerNames(group) }}</span>
+            <span class="group-pick-names">{{ group.teeTime }} · Hole {{ pickerHole(group) }}</span>
+          </span>
+          @if (group.own) {
+            <span class="pill pill-muted">Your group</span>
+          } @else {
+            <span class="group-pick-status">{{ group.thru > 0 ? 'Thru ' + group.thru : 'Not started' }} &#8250;</span>
+          }
+        </button>
+      }
+    } @else if (card) {
+      @if (!otherGroup && tickerOn) {
+        <button class="peek peek-top" type="button" (click)="openSheet('leaderboard')">
+          <span class="peek-label">Leaderboard</span>
+          @if (tickerRows.length === 0) {
+            <span class="peek-pos">Not started</span>
+          } @else {
+            <span class="ticker">
+              <span class="ticker-track" [style.animation-duration]="tickerDuration">
+                <span class="ticker-set">
+                  @for (row of tickerRows; track row.competitorId) {
+                    <span class="ticker-item"><span class="ticker-name">{{ placeLabel(row) }} {{ row.name }}</span> <span class="ticker-score">{{ rowScore(row) }}</span></span>
+                  }
+                </span>
+              </span>
+            </span>
+          }
+        </button>
       }
 
-      @if (card.canPickGroup) {
-        <label class="field field-inline">
-          <span class="field-label">Group</span>
-          <select name="groupId" [ngModel]="groupId" (ngModelChange)="changeGroup($event)">
-            @for (group of card.groups; track group.groupId) {
-              <option [ngValue]="group.groupId">{{ group.label }}</option>
-            }
-          </select>
-        </label>
-      } @else if (card.teams.length > 1 && !card.groupLabel) {
-        <label class="field field-inline">
-          <span class="field-label">Team</span>
-          <select name="teamId" [ngModel]="teamId" (ngModelChange)="changeTeam($event)">
-            @for (team of card.teams; track team.teamId) {
-              <option [ngValue]="team.teamId">{{ team.name }}</option>
-            }
-          </select>
-        </label>
+      <header class="score-head">
+        <a class="icon-button" [routerLink]="backTo" aria-label="Back">&#8249;</a>
+        <div>
+          <h1>{{ hole ? 'Hole ' + courseHole(hole) : 'Scores' }}</h1>
+          @if (hole) {
+            <p class="score-sub">
+              <span>Par {{ hole.par }}</span>
+              <span class="tee-dot" [style.background]="teeDot(hole.teeColor)"></span>
+              <span>{{ teeLabel(hole.teeName) }}</span>
+            </p>
+          }
+        </div>
+        <button class="icon-button" type="button" (click)="menuOpen = !menuOpen" aria-label="More">&#8943;</button>
+      </header>
+
+      @if (otherGroup && activeGroup) {
+        <div class="other-banner">
+          <span>Scoring: {{ activeGroup.teeTime }} group</span>
+          <button type="button" (click)="backToMine()">Back to mine</button>
+        </div>
       }
 
       @if (card.notice) {
         <p class="page-note">{{ card.notice }}</p>
       }
 
-      @if (hole && hole.lines.length > 0) {
-        <section class="tee-card">
-          @if (card.groupLabel && !card.canPickGroup) {
-            <p class="group-line">{{ card.groupLabel }}</p>
-          }
-          <p class="hole-now">Hole {{ courseHole(hole) }} - Par {{ hole.par }}</p>
-          @if (!showTeamTees(hole)) {
-            <p class="tee-name" [style.color]="hole.teeColor || 'var(--text)'">{{ hole.teeName || 'Selected tee' }}</p>
-            @if (card.runningTee) {
-              <p class="tee-label">Carried from the last hole. It stops at the front and back sets.</p>
-            }
-          }
-        </section>
-
-        @for (group of scoreGroups(hole); track group.key) {
-          @if (showTeamTees(hole)) {
-            <p class="team-tee" [style.color]="group.teeColor || 'var(--text)'">{{ group.teeName || 'Selected tee' }}</p>
-          }
-        @for (line of group.lines; track $index) {
-          <section class="player-card">
-            <p class="row-title">{{ line.displayName }}</p>
-            @if (card.oceans6 && line.userId) {
-              <div class="keep-tally">
-                @for (item of keepTally(line.userId); track item.par) {
-                  <div class="keep-stat" [class.keep-done]="item.kept >= item.need">
-                    <span class="keep-par">Par {{ item.par }}</span>
-                    <span class="keep-count">{{ item.kept }} of {{ item.need }} kept</span>
-                    <span class="keep-discard">{{ item.discarded }} discarded</span>
+      <div class="score-main">
+        @if (hole && hole.lines.length > 0) {
+          <div class="score-cards">
+            @for (group of scoreGroups(hole); track group.key) {
+              <section class="score-card">
+                <div class="score-card-head">
+                  <p class="score-card-name">{{ cardName(group) }}</p>
+                  @if (groupHasScore(group)) {
+                    <button class="clear-link" type="button" (click)="clearGroup(group)">Clear</button>
+                  }
+                  @if (showTeamTees(hole)) {
+                    <p class="score-tee">
+                      <span class="tee-dot" [style.background]="teeDot(group.teeColor)"></span>
+                      {{ teeLabel(group.teeName) }}
+                    </p>
+                  }
+                </div>
+                @for (line of group.lines; track $index) {
+                  @if (group.lines.length > 1) {
+                    <p class="score-card-name">{{ line.displayName }}</p>
+                  }
+                  <div class="score-step">
+                    <button type="button" aria-label="Lower score" (click)="bump(line, -1)">&minus;</button>
+                    <div class="score-figure" [class.empty]="line.gross == null">
+                      @if (strokeDots(line).length > 0) {
+                        <span class="sc-dots">
+                          @for (dot of strokeDots(line); track dot) { <span class="sc-dot"></span> }
+                        </span>
+                      }
+                      @if (line.strokes < 0) { <span class="sc-give">{{ givenMarks(line.strokes) }}</span> }
+                      {{ line.gross ?? '–' }}
+                    </div>
+                    <button type="button" aria-label="Raise score" (click)="bump(line, 1)">+</button>
                   </div>
+                  <p class="score-hint">{{ resultLabel(line) }}</p>
+                  @if (card.oceans6 && line.userId) {
+                    <div class="keep-tally">
+                      @for (item of keepTally(line.userId); track item.par) {
+                        <div class="keep-stat" [class.keep-done]="item.kept >= item.need">
+                          <span class="keep-par">Par {{ item.par }}</span>
+                          <span class="keep-count">{{ item.kept }} of {{ item.need }} kept</span>
+                          <span class="keep-discard">{{ item.discarded }} discarded</span>
+                        </div>
+                      }
+                    </div>
+                    <div class="inline-actions">
+                      <button class="btn-secondary" type="button" [class.chip-on]="line.kept === true"
+                              [disabled]="decisionLocked(line) || line.kept === true || !canKeep(hole.par, line.userId)"
+                              (click)="setKept(line, true)">Keep</button>
+                      <button class="btn-secondary" type="button" [class.chip-on]="line.kept === false"
+                              [disabled]="decisionLocked(line) || line.kept === false || !canDiscard(hole.par, hole.sequence, line.userId)"
+                              (click)="setKept(line, false)">Discard</button>
+                      @if (decisionLocked(line)) { <p class="row-meta">Only a league organizer can change this.</p> }
+                      @if (mustKeep(hole, line)) { <p class="row-meta">You have to keep this par {{ hole.par }}.</p> }
+                      @if (cantKeep(hole, line)) { <p class="row-meta">You can't keep this par {{ hole.par }}.</p> }
+                    </div>
+                  }
                 }
-              </div>
+              </section>
             }
-            <div class="stepper">
-              <button type="button" [disabled]="saving" (click)="bump(line, -1)">&minus;</button>
-              <div class="stepper-value" [class.stepper-unset]="line.gross == null">
-                @if (strokeDots(line).length > 0) {
-                  <span class="sc-dots">
-                    @for (dot of strokeDots(line); track dot) {
-                      <span class="sc-dot"></span>
-                    }
-                  </span>
-                }
-                @if (line.strokes < 0) {
-                  <span class="sc-give">{{ givenMarks(line.strokes) }}</span>
-                }
-                {{ line.gross ?? '--' }}
-              </div>
-              <button type="button" [disabled]="saving" (click)="bump(line, 1)">+</button>
-            </div>
-            @if (card.oceans6 && line.userId) {
-              <div class="inline-actions">
-                <button class="btn-secondary" type="button" [class.chip-on]="line.kept === true"
-                        [disabled]="saving || decisionLocked(line) || line.kept === true || !canKeep(hole.par, line.userId)"
-                        (click)="setKept(line, true)">Keep</button>
-                <button class="btn-secondary" type="button" [class.chip-on]="line.kept === false"
-                        [disabled]="saving || decisionLocked(line) || line.kept === false || !canDiscard(hole.par, hole.sequence, line.userId)"
-                        (click)="setKept(line, false)">Discard</button>
-                @if (line.kept === true) { <span class="pill">Keeping</span> }
-                @if (line.kept === false) { <span class="pill pill-muted">Discarded</span> }
-                @if (decisionLocked(line)) {
-                  <p class="row-meta">Only a league organizer can change this.</p>
-                }
-                @if (mustKeep(hole, line)) {
-                  <p class="row-meta">You have to keep this par {{ hole.par }}.</p>
-                }
-                @if (cantKeep(hole, line)) {
-                  <p class="row-meta">You can't keep this par {{ hole.par }}.</p>
-                }
-              </div>
-            }
-          </section>
+          </div>
+        } @else if (card.holes.length === 0 && !card.notice) {
+          <p class="page-note">This round has no holes yet. The organizer needs to save the course first.</p>
         }
-          @if (group.score != null) {
-            <p class="section-label">Team score {{ group.score }}</p>
+        @if (error) { <p class="error">{{ error }}</p> }
+      </div>
+
+      @if (hole && hole.lines.length > 0) {
+        <div class="score-bar">
+          @if (needsDecision) {
+            <p class="score-warn">Keep or discard each score before the next hole.</p>
           }
-        }
-
-        @if (hole.countingScore != null && !dirty && !hasVegasScore(hole)) {
-          <p class="section-label">Hole score {{ hole.countingScore }}</p>
-        }
-
-        <button class="btn-secondary clear-scores" type="button" [disabled]="saving || !hasScores || clearLocked" (click)="clearScores()">{{ clearLabel }}</button>
-
-        <div class="hole-nav">
-          <button class="btn-secondary" type="button" [disabled]="saving || onFirstHole" (click)="previous()">Previous</button>
-          <button class="btn-primary btn-inline" type="button" [disabled]="saving || needsDecision || (onLastHole && !dirty)" (click)="next()">{{ nextLabel }}</button>
+          <div class="score-nav">
+            <button class="score-prev" type="button" [disabled]="onFirstHole" (click)="previous()" aria-label="Previous hole">&#8249;</button>
+            <button class="score-next" type="button" [disabled]="needsDecision" (click)="next()">{{ nextLabel }}</button>
+          </div>
         </div>
-        @if (needsDecision) {
-          <p class="page-note">Keep or discard each score before the next hole.</p>
-        }
-        <button class="btn-secondary clear-scores" type="button" [disabled]="saving || !dirty" (click)="cancel()">Cancel</button>
-      } @else if (card.holes.length === 0 && !card.notice) {
-        <p class="page-note">This round has no holes yet. The organizer needs to save the course first.</p>
       }
+    } @else if (error) {
+      <p class="error">{{ error }}</p>
     }
-
-    @if (error) { <p class="error">{{ error }}</p> }
   </div>
+
+  @if (menuOpen && card) {
+    <button class="scrim score-scrim" type="button" aria-label="Close menu" (click)="menuOpen = false"></button>
+    <div class="score-menu">
+      <button type="button" (click)="openSheet('scorecard')">Scorecard</button>
+      @if (card.organizer && card.groups.length > 1) {
+        <button type="button" (click)="openPicker()">
+          Score another group
+          <span class="admin-badge">ADMIN</span>
+        </button>
+      }
+      <button type="button" (click)="clearBoth()">Clear both scores</button>
+      <button type="button" (click)="toggleTicker()">
+        Leaderboard Ticker
+        @if (tickerOn) { <span aria-hidden="true">&#10003;</span> }
+      </button>
+    </div>
+  }
+
+  @if (sheet && card) {
+    <button class="scrim score-scrim" type="button" aria-label="Close" (click)="closeSheet()"></button>
+    <div class="peek-sheet-wrap">
+      <div class="peek-sheet">
+        <button class="sheet-grip" type="button" aria-label="Close" (pointerdown)="gripDown($event)" (click)="closeSheet()">
+          <span></span>
+        </button>
+        <div class="segment">
+          <button type="button" [class.on]="sheet === 'leaderboard'" (click)="sheet = 'leaderboard'">Leaderboard</button>
+          <button type="button" [class.on]="sheet === 'scorecard'" (click)="sheet = 'scorecard'">Scorecard</button>
+        </div>
+        <div class="sheet-body">
+          @if (sheet === 'leaderboard') {
+            @for (row of board?.rows ?? []; track row.competitorId) {
+              <div class="peek-row" [class.mine]="isMe(row)">
+                <span class="peek-rank">{{ row.rank }}</span>
+                <span class="peek-name">{{ row.name }}</span>
+                <span class="peek-score">{{ rowScore(row) }}</span>
+              </div>
+            }
+          } @else {
+            <p class="page-note">Tap any hole to jump back and fix a score.</p>
+            @for (nine of nines(); track $index) {
+              <div class="nine-scroll">
+              <div class="nine" [style.grid-template-columns]="nineColumns(nine)">
+                <span class="nine-label"><span>Hole</span></span>
+                @for (item of nine; track item.sequence) {
+                  <button class="nine-head" type="button" (click)="jumpTo(item)">{{ courseHole(item) }}</button>
+                }
+                <span class="nine-label"><span>Par</span></span>
+                @for (item of nine; track item.sequence) {
+                  <button type="button" (click)="jumpTo(item)">{{ item.par }}</button>
+                }
+                @for (row of sheetRows(); track row.key) {
+                  <span class="nine-label"><span>{{ row.name }}</span></span>
+                  @for (item of nine; track item.sequence) {
+                    <button type="button" class="nine-score" (click)="jumpTo(item)">
+                      @if (sheetDots(item, row.key).length > 0) {
+                        <span class="sc-dots">
+                          @for (dot of sheetDots(item, row.key); track dot) { <span class="sc-dot"></span> }
+                        </span>
+                      }
+                      @if (sheetGive(item, row.key)) {
+                        <span class="sc-give">{{ sheetGive(item, row.key) }}</span>
+                      }
+                      <span class="nine-gross" [class.sc-under]="isUnder(item, row.key)" [class.sc-over]="isOver(item, row.key)">{{ lineOn(item, row.key)?.gross ?? '' }}</span>
+                    </button>
+                  }
+                }
+              </div>
+              </div>
+            }
+          }
+        </div>
+      </div>
+    </div>
+  }
 </div>
