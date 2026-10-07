@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../services/api.service';
 import { AuthService, SessionUser } from '../services/auth.service';
@@ -12,7 +12,7 @@ import { ShellComponent } from '../ui/shell.component';
   imports: [FormsModule, ShellComponent],
   templateUrl: './account.component.html',
 })
-export class AccountComponent {
+export class AccountComponent implements OnInit {
   firstName = '';
   lastName = '';
   displayName = '';
@@ -23,7 +23,10 @@ export class AccountComponent {
   uploading = false;
   pictureVisible = true;
 
-  constructor(private api: ApiService, private auth: AuthService, private images: ImageService) {
+  constructor(private api: ApiService, private auth: AuthService, private images: ImageService) {}
+
+  async ngOnInit(): Promise<void> {
+    await this.auth.whenReady();
     const user = this.auth.user();
     if (!user) return;
     this.firstName = user.firstName;

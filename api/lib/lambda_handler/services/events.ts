@@ -1023,6 +1023,13 @@ export async function saveTeam(client: Client, user: AuthUser, body: any) {
   if (!isTeamFormat(bundle.event.format)) throw new HttpError('This format does not use teams');
 
   const action = String(body.action || 'create');
+  if (action === 'refreshNames') {
+    if (role !== 'organizer') throw new HttpError('Only a league organizer can refresh team names', 403);
+    const teams = await client.query(`SELECT id FROM team WHERE event_id = $1`, [eventId]);
+    for (const team of teams.rows) await refreshTeamName(client, Number(team.id));
+    return { eventId, updated: teams.rows.length };
+  }
+
   if (action === 'delete') {
     if (role !== 'organizer') throw new HttpError('Only a league organizer can delete a team', 403);
     await client.query(`DELETE FROM team WHERE id = $1 AND event_id = $2`, [Number(body.teamId), eventId]);

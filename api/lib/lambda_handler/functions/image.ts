@@ -17,7 +17,8 @@ const s3 = new S3Client({});
 export const handler: Handler = async (event: any) => handle(event, async (body) => {
   return withClient(async (client) => {
     const user = await requireUser(client, body);
-    const contentType = String(body.contentType || '');
+    const rawType = String(body.contentType || '').toLowerCase();
+    const contentType = rawType === 'image/jpg' || rawType === 'image/pjpeg' ? 'image/jpeg' : rawType;
     const extension = EXTENSIONS[contentType];
     if (!extension) throw new HttpError('Use a JPEG, PNG, or WebP image');
 

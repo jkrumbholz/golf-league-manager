@@ -22,8 +22,11 @@ interface Session {
 export class AuthService {
   private readonly storageKey = 'golf-league-manager.session';
   private current: Session | null = this.read();
+  private readonly loaded: Promise<void>;
 
-  constructor(private http: HttpClient, private config: ConfigService) {}
+  constructor(private http: HttpClient, private config: ConfigService) {
+    this.loaded = this.refresh();
+  }
 
   token(): string | null {
     return this.current?.token ?? null;
@@ -66,6 +69,25 @@ export class AuthService {
   replaceUser(user: SessionUser): void {
     if (!this.current) return;
     this.persist({ token: this.current.token, user });
+  }
+
+  /** Resolves after the saved session has been brought up to date, or immediately when signed out. */
+  whenReady(): Promise<void> {
+    return this.loaded;
+  }
+
+  private async refresh(): Promise<void> {
+    const token = this.token();
+    if (!token) return;
+    try {
+      const result = await firstValueFrom(this.http.post<{ user: SessionUser }>(
+        `${this.config.leagueApi()}/user`,
+        { token }
+      ));
+      if (result.user) this.replaceUser(result.user);
+    } catch {
+      // Keep the saved session when the server cannot be reached.
+    }
   }
 
   private persist(session: Session): void {
