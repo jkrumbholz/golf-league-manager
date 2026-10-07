@@ -190,6 +190,7 @@
           } @else {
             <p class="page-note">Tap any hole to jump back and fix a score.</p>
             @for (nine of nines(); track $index) {
+              <div class="nine-scroll">
               <div class="nine" [style.grid-template-columns]="nineColumns(nine)">
                 <span class="nine-label"><span>Hole</span></span>
                 @for (item of nine; track item.sequence) {
@@ -202,7 +203,7 @@
                 @for (row of sheetRows(); track row.key) {
                   <span class="nine-label"><span>{{ row.name }}</span></span>
                   @for (item of nine; track item.sequence) {
-                    <button type="button" class="nine-score" [class.under]="isUnder(item, row.key)" [class.over]="isOver(item, row.key)" (click)="jumpTo(item)">
+                    <button type="button" class="nine-score" (click)="jumpTo(item)">
                       @if (sheetDots(item, row.key).length > 0) {
                         <span class="sc-dots">
                           @for (dot of sheetDots(item, row.key); track dot) { <span class="sc-dot"></span> }
@@ -211,10 +212,11 @@
                       @if (sheetGive(item, row.key)) {
                         <span class="sc-give">{{ sheetGive(item, row.key) }}</span>
                       }
-                      {{ lineOn(item, row.key)?.gross ?? '' }}
+                      <span class="nine-gross" [class.sc-under]="isUnder(item, row.key)" [class.sc-over]="isOver(item, row.key)">{{ lineOn(item, row.key)?.gross ?? '' }}</span>
                     </button>
                   }
                 }
+              </div>
               </div>
             }
           }

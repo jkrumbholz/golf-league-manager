@@ -373,7 +373,7 @@ export class ScoreComponent implements OnInit {
   }
 
   nineColumns(nine: HoleView[]): string {
-    return `88px repeat(${nine.length}, minmax(32px, 1fr))`;
+    return `88px repeat(${nine.length}, 44px)`;
   }
 
   sheetRows(): Array<{ key: string; name: string }> {
