@@ -1,8 +1,7 @@
 import { Component, OnInit } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../services/api.service';
-import { ShellComponent } from '../ui/shell.component';
+import { AuthService } from '../services/auth.service';
 
 interface HoleLine {
   userId: number | null;
@@ -30,6 +29,17 @@ interface HoleView {
 interface ScoreGroup {
   groupId: number;
   label: string;
+  teeTime: string;
+  names: string;
+  thru: number;
+  currentHole: number;
+  own: boolean;
+}
+
+interface ScoreTeam {
+  teamId: number;
+  name: string;
+  members?: Array<{ userId: number }>;
 }
 
 interface Scorecard {
@@ -45,19 +55,42 @@ interface Scorecard {
   competitorId: number | null;
   competitorName: string | null;
   holes: HoleView[];
-  teams: Array<{ teamId: number; name: string }>;
+  teams: ScoreTeam[];
   groups: ScoreGroup[];
   canPickGroup: boolean;
   groupId: number | null;
+  ownGroupId: number | null;
   groupLabel: string | null;
   startingHole: number | null;
   notice: string | null;
 }
 
+interface BoardRow {
+  competitorId: number;
+  rank: number;
+  name: string;
+  thru: number;
+  total: number | null;
+  toPar: number | null;
+  lastHole: number | null;
+  memberUserIds: number[];
+}
+
+interface Board {
+  rows: BoardRow[];
+}
+
+interface LineGroup {
+  key: string;
+  teeName: string;
+  teeColor: string | null;
+  lines: HoleLine[];
+}
+
 @Component({
   selector: 'app-score',
   standalone: true,
-  imports: [FormsModule, ShellComponent],
+  imports: [RouterLink],
   templateUrl: './score.component.html',
 })
 export class ScoreComponent implements OnInit {
@@ -65,13 +98,26 @@ export class ScoreComponent implements OnInit {
   teamId: number | null = null;
   groupId: number | null = null;
   card: Scorecard | null = null;
+  board: Board | null = null;
   holeIndex = 0;
   error = '';
   saving = false;
-  /** Scores on this hole when it was opened, so Cancel can put them back. */
+  picking = false;
+  menuOpen = false;
+  sheet: 'leaderboard' | 'scorecard' | null = null;
+  /** Remembered on this device until the player turns the ticker back on. */
+  tickerOn = this.rememberedTicker();
+  private ownHoleIndex: number | null = null;
+  private chain: Promise<boolean> = Promise.resolve(true);
+  /** Scores on this hole when it was last saved, so a newer tap is not overwritten. */
   private baseline: Array<{ gross: number | null; kept: boolean | null; net: number | null }> = [];
 
-  constructor(private route: ActivatedRoute, private router: Router, private api: ApiService) {}
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    private api: ApiService,
+    private auth: AuthService
+  ) {}
 
   async ngOnInit(): Promise<void> {
     this.roundId = Number(this.route.snapshot.paramMap.get('roundId'));
@@ -95,6 +141,7 @@ export class ScoreComponent implements OnInit {
     }
     this.capture();
     this.applyForced();
+    void this.loadBoard(true);
   }
 
   get hole(): HoleView | null {
@@ -105,13 +152,81 @@ export class ScoreComponent implements OnInit {
     return this.card ? ['/events', this.card.eventId] : ['/leagues'];
   }
 
-  get title(): string {
-    const hole = this.hole;
-    return hole ? `Hole ${this.courseHole(hole)}` : 'Scores';
+  get otherGroup(): boolean {
+    return !!this.card
+      && this.card.organizer
+      && this.card.ownGroupId != null
+      && this.card.groupId !== this.card.ownGroupId;
+  }
+
+  pickerNames(group: ScoreGroup): string {
+    const direct = group.names.trim();
+    if (direct) return direct;
+    const parts = group.label.split(' · ').map(part => part.trim()).filter(part => part.length > 0);
+    const holeAt = parts.findIndex(part => /^hole \d+$/i.test(part));
+    if (holeAt >= 0) return parts.slice(holeAt + 1).join(', ');
+    return parts.length > 1 ? parts.slice(1).join(', ') : '';
+  }
+
+  pickerHole(group: ScoreGroup): number {
+    if (group.currentHole > 1 || group.thru > 0) return group.currentHole;
+    const match = /Hole (\d+)/i.exec(group.label);
+    return match ? Number(match[1]) : group.currentHole;
+  }
+
+  get activeGroup(): ScoreGroup | null {
+    if (!this.card?.groupId) return null;
+    return this.card.groups.find(group => group.groupId === this.card?.groupId) ?? null;
+  }
+
+  get topFive(): BoardRow[] {
+    return (this.board?.rows ?? [])
+      .filter(row => row.toPar != null || row.total != null)
+      .slice(0, 5);
+  }
+
+  placeLabel(row: BoardRow): string {
+    const tied = (this.board?.rows ?? []).some(item => item !== row && item.rank === row.rank && (item.toPar != null || item.total != null));
+    return tied ? `T${row.rank})` : `${row.rank})`;
+  }
+
+  get onFirstHole(): boolean {
+    const order = this.playOrder();
+    return order.length === 0 || this.holeIndex === order[0];
+  }
+
+  get onLastHole(): boolean {
+    const order = this.playOrder();
+    return order.length === 0 || this.holeIndex === order[order.length - 1];
+  }
+
+  get nextLabel(): string {
+    return this.onLastHole ? 'Finish round' : 'Next hole';
+  }
+
+  get needsDecision(): boolean {
+    return this.holeNeedsDecision(this.hole);
   }
 
   courseHole(hole: HoleView): number {
     return hole.displayHoleNumber ?? hole.sequence;
+  }
+
+  teeDot(color: string | null): string {
+    const match = /^#?([0-9a-f]{6})$/i.exec(color?.trim() ?? '');
+    if (!match) return 'var(--text-muted)';
+    const value = parseInt(match[1], 16);
+    const lift = (channel: number) => Math.round(channel + (255 - channel) * 0.55);
+    const red = lift((value >> 16) & 255);
+    const green = lift((value >> 8) & 255);
+    const blue = lift(value & 255);
+    return `rgb(${red}, ${green}, ${blue})`;
+  }
+
+  teeLabel(name: string | null | undefined): string {
+    const text = (name || '').trim();
+    if (!text) return 'Tee';
+    return /tees$/i.test(text) ? text : `${text} tees`;
   }
 
   async load(): Promise<void> {
@@ -129,42 +244,22 @@ export class ScoreComponent implements OnInit {
     }
   }
 
-  async changeTeam(teamId: number): Promise<void> {
-    const nextId = Number(teamId);
-    if (nextId === this.teamId) return;
-    if (!(await this.persist())) return;
-    this.revertUnsavedForced();
-    this.teamId = nextId;
-    await this.load();
-    this.applyForced();
-  }
-
   async changeGroup(groupId: number): Promise<void> {
     const nextId = Number(groupId);
     if (nextId === this.groupId) return;
-    if (!(await this.persist())) return;
+    if (!(await this.flush())) return;
     this.revertUnsavedForced();
     this.groupId = nextId;
     await this.load();
     this.holeIndex = this.nextOpenHole();
     this.capture();
     this.applyForced();
-  }
-
-  async openScorecard(): Promise<void> {
-    if (!this.card || !(await this.persist())) return;
-    const queryParams = this.card.groupId ? { group: this.card.groupId } : {};
-    await this.router.navigate(['/events', this.card.eventId, 'score', this.roundId, 'card'], { queryParams });
-  }
-
-  async openLeaderboard(): Promise<void> {
-    if (!this.card || !(await this.persist())) return;
-    await this.router.navigate(['/events', this.card.eventId]);
+    void this.loadBoard(true);
   }
 
   async previous(): Promise<void> {
-    if (this.onFirstHole || this.saving) return;
-    if (!(await this.persist())) return;
+    if (this.onFirstHole) return;
+    if (!(await this.flush())) return;
     this.revertUnsavedForced();
     const order = this.playOrder();
     const at = order.indexOf(this.holeIndex);
@@ -173,75 +268,13 @@ export class ScoreComponent implements OnInit {
     this.applyForced();
   }
 
-  get needsDecision(): boolean {
-    return this.holeNeedsDecision(this.hole);
-  }
-
-  /** Holes in the order this group plays them, beginning at its starting hole. */
-  private playOrder(): number[] {
-    const count = this.card?.holes.length ?? 0;
-    if (count === 0) return [];
-    const start = this.startIndex();
-    return Array.from({ length: count }, (_, offset) => (start + offset) % count);
-  }
-
-  private startIndex(): number {
-    const start = this.card?.startingHole;
-    if (!this.card || start == null || start < 1) return 0;
-    const index = this.card.holes.findIndex(hole => this.courseHole(hole) === start);
-    return index >= 0 ? index : 0;
-  }
-
-  /**
-   * The hole after the furthest one that already has a score, walking from the starting hole.
-   * Hole 10 being finished must not send you back there when hole 9 is the last hole of the day.
-   */
-  private nextOpenHole(): number {
-    const order = this.playOrder();
-    if (order.length === 0 || !this.card) return 0;
-    let lastPlayed = -1;
-    order.forEach((index, step) => {
-      if (this.holePlayed(this.card!.holes[index])) lastPlayed = step;
-    });
-    if (lastPlayed < 0) return order[0];
-    if (lastPlayed >= order.length - 1) return order[lastPlayed];
-    return order[lastPlayed + 1];
-  }
-
-  private holePlayed(hole: HoleView): boolean {
-    return hole.lines.some(line => line.gross != null);
-  }
-
-  private firstUndecidedIndex(): number | null {
-    if (!this.card?.oceans6) return null;
-    const index = this.playOrder().find(holeIndex => this.holeNeedsDecision(this.card!.holes[holeIndex]));
-    return index ?? null;
-  }
-
-  private holeNeedsDecision(hole: HoleView | null): boolean {
-    if (!this.card?.oceans6 || !hole) return false;
-    return hole.lines.some(line => line.gross != null && line.kept == null);
-  }
-
-  get onFirstHole(): boolean {
-    const order = this.playOrder();
-    return order.length === 0 || this.holeIndex === order[0];
-  }
-
-  get onLastHole(): boolean {
-    const order = this.playOrder();
-    return order.length === 0 || this.holeIndex === order[order.length - 1];
-  }
-
-  get nextLabel(): string {
-    return this.onLastHole ? 'Save' : 'Next hole';
-  }
-
   async next(): Promise<void> {
-    if (this.saving || !this.card || this.needsDecision) return;
-    if (this.onLastHole && !this.dirty) return;
-    if (!(await this.persist())) return;
-    if (this.onLastHole) return;
+    if (!this.card || this.needsDecision) return;
+    if (!(await this.flush())) return;
+    if (this.onLastHole) {
+      await this.router.navigate(['/events', this.card.eventId]);
+      return;
+    }
     this.revertUnsavedForced();
     const order = this.playOrder();
     const at = order.indexOf(this.holeIndex);
@@ -250,9 +283,122 @@ export class ScoreComponent implements OnInit {
     this.applyForced();
   }
 
-  /** One block per team so a running tee can differ inside the same group. */
-  scoreGroups(hole: HoleView): Array<{ key: string; teeName: string; teeColor: string | null; lines: HoleLine[]; score: number | null }> {
-    const groups: Array<{ key: string; teeName: string; teeColor: string | null; lines: HoleLine[] }> = [];
+  toggleTicker(): void {
+    this.tickerOn = !this.tickerOn;
+    this.menuOpen = false;
+    try {
+      localStorage.setItem('golf-league-manager.score-ticker', this.tickerOn ? 'shown' : 'hidden');
+    } catch {
+      // A private browser can refuse storage. The choice still applies until reload.
+    }
+  }
+
+  private rememberedTicker(): boolean {
+    try {
+      return localStorage.getItem('golf-league-manager.score-ticker') !== 'hidden';
+    } catch {
+      return true;
+    }
+  }
+
+  openSheet(tab: 'leaderboard' | 'scorecard'): void {
+    this.menuOpen = false;
+    this.sheet = tab;
+    void this.loadBoard(true);
+  }
+
+  closeSheet(): void {
+    this.sheet = null;
+  }
+
+  gripDown(event: PointerEvent): void {
+    const start = event.clientY;
+    const move = (pointer: PointerEvent) => {
+      if (pointer.clientY - start > 70) {
+        this.closeSheet();
+        window.removeEventListener('pointermove', move);
+      }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  async jumpTo(hole: HoleView): Promise<void> {
+    const index = this.card?.holes.indexOf(hole) ?? -1;
+    if (index < 0 || !(await this.flush())) return;
+    this.holeIndex = index;
+    this.sheet = null;
+    this.capture();
+    this.applyForced();
+  }
+
+  openPicker(): void {
+    this.menuOpen = false;
+    this.picking = true;
+  }
+
+  async pickGroup(groupId: number): Promise<void> {
+    if (this.card?.groupId != null && this.card.groupId === this.card.ownGroupId) {
+      this.ownHoleIndex = this.holeIndex;
+    }
+    this.picking = false;
+    await this.changeGroup(groupId);
+  }
+
+  async backToMine(): Promise<void> {
+    const id = this.card?.ownGroupId;
+    if (id == null) return;
+    const hole = this.ownHoleIndex;
+    await this.changeGroup(id);
+    if (hole != null && this.card && hole >= 0 && hole < this.card.holes.length) {
+      this.holeIndex = hole;
+      this.capture();
+      this.applyForced();
+    }
+  }
+
+  nines(): HoleView[][] {
+    if (!this.card) return [];
+    const front = this.card.holes.filter(hole => this.courseHole(hole) <= 9);
+    const back = this.card.holes.filter(hole => this.courseHole(hole) > 9);
+    return [front, back].filter(nine => nine.length > 0);
+  }
+
+  nineColumns(nine: HoleView[]): string {
+    return `64px repeat(${nine.length}, minmax(28px, 1fr))`;
+  }
+
+  viewerLine(hole: HoleView): HoleLine | null {
+    const id = this.auth.user()?.id;
+    if (id != null) {
+      const mine = hole.lines.find(line => line.userId === id);
+      if (mine) return mine;
+      const team = this.card?.teams.find(item => item.members?.some(member => member.userId === id));
+      const teamLine = team ? hole.lines.find(line => line.teamId === team.teamId) : null;
+      if (teamLine) return teamLine;
+    }
+    return hole.lines[0] ?? null;
+  }
+
+  sheetName(): string {
+    const hole = this.card?.holes.find(item => this.viewerLine(item));
+    return (hole && this.viewerLine(hole)?.displayName) || 'Score';
+  }
+
+  grossClass(hole: HoleView): string {
+    const gross = this.viewerLine(hole)?.gross;
+    if (gross == null) return '';
+    if (gross < hole.par) return 'under';
+    if (gross > hole.par) return 'over';
+    return '';
+  }
+
+  scoreGroups(hole: HoleView): LineGroup[] {
+    const groups: LineGroup[] = [];
     for (const line of hole.lines) {
       const key = line.teamId != null ? `t${line.teamId}` : `u${line.userId ?? 0}`;
       let group = groups.find(item => item.key === key);
@@ -267,27 +413,35 @@ export class ScoreComponent implements OnInit {
       }
       group.lines.push(line);
     }
-    return groups.map(group => ({ ...group, score: this.vegasHole(group.lines, hole.par) }));
+    return groups;
   }
 
   showTeamTees(hole: HoleView): boolean {
     return !!this.card?.runningTee && this.scoreGroups(hole).length > 1;
   }
 
-  hasVegasScore(hole: HoleView): boolean {
-    return this.scoreGroups(hole).some(group => group.score != null);
+  cardName(group: LineGroup): string {
+    if (group.lines.length === 1) return group.lines[0].displayName;
+    const teamId = group.lines[0]?.teamId;
+    const team = this.card?.teams.find(item => item.teamId === teamId);
+    return team?.name || group.lines[0]?.displayName || 'Team';
   }
 
-  private vegasHole(lines: HoleLine[], par: number): number | null {
-    if (this.card?.format !== 'vegas' && this.card?.format !== 'vegas_up_and_back') return null;
-    if (lines.length !== 2 || lines.some(line => line.net == null)) return null;
-    const low = Math.min(lines[0].net as number, lines[1].net as number);
-    const high = Math.max(lines[0].net as number, lines[1].net as number);
-    const doubleBogey = par + 2;
-    const flip = lines.some(line => (line.net as number) >= doubleBogey);
-    const tens = flip ? high : low;
-    const ones = flip ? low : high;
-    return tens * 10 + ones;
+  groupHasScore(group: LineGroup): boolean {
+    return group.lines.some(line => line.gross != null);
+  }
+
+  resultLabel(line: HoleLine): string {
+    if (line.gross == null || !this.hole) return 'Tap + to start at par';
+    const diff = line.gross - this.hole.par;
+    if (diff === 0) return 'Par';
+    if (diff === -1) return 'Birdie';
+    if (diff === -2) return 'Eagle';
+    if (diff <= -3) return 'Albatross';
+    if (diff === 1) return 'Bogey';
+    if (diff === 2) return 'Double bogey';
+    if (diff === 3) return 'Triple bogey';
+    return `${diff} over`;
   }
 
   strokeDots(line: HoleLine): number[] {
@@ -307,12 +461,25 @@ export class ScoreComponent implements OnInit {
     line.net = next - line.strokes;
   }
 
-  get hasScores(): boolean {
-    return !!this.hole?.lines.some(line => line.gross != null);
+  clearGroup(group: LineGroup): void {
+    if (group.lines.some(line => this.decisionLocked(line))) return;
+    for (const line of group.lines) {
+      line.gross = null;
+      line.net = null;
+      line.kept = null;
+    }
+    this.applyForced();
   }
 
-  get clearLabel(): string {
-    return (this.hole?.lines.length ?? 0) === 2 ? 'Clear both scores' : 'Clear scores';
+  clearBoth(): void {
+    this.menuOpen = false;
+    if (!this.hole || this.clearLocked) return;
+    for (const line of this.hole.lines) {
+      line.gross = null;
+      line.net = null;
+      line.kept = null;
+    }
+    this.applyForced();
   }
 
   decisionLocked(line: HoleLine): boolean {
@@ -323,40 +490,6 @@ export class ScoreComponent implements OnInit {
 
   get clearLocked(): boolean {
     return !!this.hole?.lines.some(line => this.decisionLocked(line));
-  }
-
-    get dirty(): boolean {
-    return !!this.hole?.lines.some((line, index) => {
-      const saved = this.baseline[index];
-      if (!saved) return line.gross != null || line.kept != null;
-      if (saved.gross !== line.gross) return true;
-      if (saved.kept === line.kept) return false;
-      // A forced choice with no score yet is only a preview. It saves with the gross.
-      return !(line.gross == null && saved.gross == null && saved.kept == null);
-    });
-  }
-
-  cancel(): void {
-    if (!this.hole) return;
-    this.hole.lines.forEach((line, index) => {
-      const saved = this.baseline[index];
-      if (!saved) return;
-      line.gross = saved.gross;
-      line.kept = saved.kept;
-      line.net = saved.net;
-    });
-    this.error = '';
-    this.applyForced();
-  }
-
-  clearScores(): void {
-    if (!this.hole || !this.hasScores || this.clearLocked) return;
-    for (const line of this.hole.lines) {
-      line.gross = null;
-      line.net = null;
-      line.kept = null;
-    }
-    this.applyForced();
   }
 
   setKept(line: HoleLine, kept: boolean): void {
@@ -381,11 +514,6 @@ export class ScoreComponent implements OnInit {
       kept: this.keptCount(par, userId),
       discarded: this.discardedCount(par, userId),
     }));
-  }
-
-  private discardedCount(par: number, userId: number | null): number {
-    if (!this.card) return 0;
-    return this.card.holes.filter(hole => hole.par === par && hole.lines.some(line => line.userId === userId && line.kept === false)).length;
   }
 
   canKeep(par: number, userId: number | null): boolean {
@@ -414,7 +542,64 @@ export class ScoreComponent implements OnInit {
     return !this.canKeep(hole.par, line.userId);
   }
 
-  /** Selects Keep or Discard when that is the only legal choice. */
+  isMe(row: BoardRow): boolean {
+    const id = this.auth.user()?.id;
+    return id != null && row.memberUserIds.includes(id);
+  }
+
+  toPar(value: number | null): string {
+    if (value == null || value === 0) return 'E';
+    return value > 0 ? `+${value}` : `−${Math.abs(value)}`;
+  }
+
+  rowScore(row: BoardRow): string {
+    if (row.toPar != null) return this.toPar(row.toPar);
+    if (row.total != null) return String(row.total);
+    return '–';
+  }
+
+  /** Holes in the order this group plays them, beginning at its starting hole. */
+  private playOrder(): number[] {
+    const count = this.card?.holes.length ?? 0;
+    if (count === 0) return [];
+    const start = this.startIndex();
+    return Array.from({ length: count }, (_, offset) => (start + offset) % count);
+  }
+
+  private startIndex(): number {
+    const start = this.card?.startingHole;
+    if (!this.card || start == null || start < 1) return 0;
+    const index = this.card.holes.findIndex(hole => this.courseHole(hole) === start);
+    return index >= 0 ? index : 0;
+  }
+
+  private nextOpenHole(): number {
+    const order = this.playOrder();
+    if (order.length === 0 || !this.card) return 0;
+    let lastPlayed = -1;
+    order.forEach((index, step) => {
+      if (this.holePlayed(this.card!.holes[index])) lastPlayed = step;
+    });
+    if (lastPlayed < 0) return order[0];
+    if (lastPlayed >= order.length - 1) return order[lastPlayed];
+    return order[lastPlayed + 1];
+  }
+
+  private holePlayed(hole: HoleView): boolean {
+    return hole.lines.some(line => line.gross != null);
+  }
+
+  private firstUndecidedIndex(): number | null {
+    if (!this.card?.oceans6) return null;
+    const index = this.playOrder().find(holeIndex => this.holeNeedsDecision(this.card!.holes[holeIndex]));
+    return index ?? null;
+  }
+
+  private holeNeedsDecision(hole: HoleView | null): boolean {
+    if (!this.card?.oceans6 || !hole) return false;
+    return hole.lines.some(line => line.gross != null && line.kept == null);
+  }
+
   private applyForced(): void {
     if (!this.card?.oceans6 || !this.hole) return;
     for (const line of this.hole.lines) {
@@ -424,7 +609,6 @@ export class ScoreComponent implements OnInit {
     }
   }
 
-  /** Drops a previewed choice that was never saved, so the next hole is not affected. */
   private revertUnsavedForced(): void {
     if (!this.hole) return;
     this.hole.lines.forEach((line, index) => {
@@ -437,10 +621,20 @@ export class ScoreComponent implements OnInit {
   private applyCard(card: Scorecard): void {
     this.card = {
       ...card,
-      groups: card.groups ?? [],
+      groups: (card.groups ?? []).map(group => ({
+        groupId: group.groupId,
+        label: group.label ?? '',
+        teeTime: group.teeTime ?? '',
+        names: group.names ?? '',
+        thru: group.thru ?? 0,
+        currentHole: group.currentHole ?? 1,
+        own: !!group.own,
+      })),
+      teams: card.teams ?? [],
       organizer: !!card.organizer,
       canPickGroup: !!card.canPickGroup,
       groupId: card.groupId ?? null,
+      ownGroupId: card.ownGroupId ?? null,
       groupLabel: card.groupLabel ?? null,
       startingHole: card.startingHole ?? null,
       notice: card.notice ?? null,
@@ -455,6 +649,11 @@ export class ScoreComponent implements OnInit {
     return 0;
   }
 
+  private discardedCount(par: number, userId: number | null): number {
+    if (!this.card) return 0;
+    return this.card.holes.filter(hole => hole.par === par && hole.lines.some(line => line.userId === userId && line.kept === false)).length;
+  }
+
   private capture(): void {
     this.baseline = (this.hole?.lines ?? []).map(line => ({
       gross: line.gross,
@@ -463,14 +662,43 @@ export class ScoreComponent implements OnInit {
     }));
   }
 
-  /** Writes this hole when something changed. Stays put and keeps the edits if the save fails. */
-  private async persist(): Promise<boolean> {
+  private get dirty(): boolean {
+    return !!this.hole?.lines.some((line, index) => {
+      const saved = this.baseline[index];
+      if (!saved) return line.gross != null || line.kept != null;
+      if (saved.gross !== line.gross) return true;
+      if (saved.kept === line.kept) return false;
+      return !(line.gross == null && saved.gross == null && saved.kept == null);
+    });
+  }
+
+  private queueSave(): void {
+    this.chain = this.chain.then(() => this.writeHole());
+  }
+
+  private async flush(): Promise<boolean> {
+    const ok = await this.chain;
+    if (!ok) return false;
+    if (!this.dirty) return true;
+    this.queueSave();
+    return this.chain;
+  }
+
+  /** Writes this hole when something changed. A tap that lands mid-save is written next. */
+  private async writeHole(): Promise<boolean> {
     if (!this.hole || !this.dirty) return true;
-    if (this.saving) return false;
     this.saving = true;
     this.error = '';
+    const holeIndex = this.holeIndex;
     const sequence = this.hole.sequence;
-    const scores = this.hole.lines.flatMap((line, index) => {
+    const local = this.hole.lines.map(line => ({
+      gross: line.gross,
+      kept: line.kept,
+      net: line.net,
+      userId: line.userId,
+      teamId: line.teamId,
+    }));
+    const scores = local.flatMap((line, index) => {
       const saved = this.baseline[index];
       if (saved && saved.gross === line.gross && saved.kept === line.kept) return [];
       return [{
@@ -488,16 +716,34 @@ export class ScoreComponent implements OnInit {
         groupId: this.groupId,
         scores,
       });
-      const index = this.holeIndex;
       this.applyCard(saved);
-      this.holeIndex = index;
+      this.holeIndex = holeIndex;
       this.capture();
+      this.hole?.lines.forEach((line, index) => {
+        const want = local[index];
+        if (!want) return;
+        if (want.gross !== line.gross || want.kept !== line.kept) {
+          line.gross = want.gross;
+          line.kept = want.kept;
+          line.net = want.net;
+        }
+      });
+      void this.loadBoard(true);
       return true;
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Could not save the score';
       return false;
     } finally {
       this.saving = false;
+    }
+  }
+
+  private async loadBoard(quiet: boolean): Promise<void> {
+    if (!this.card) return;
+    try {
+      this.board = await this.api.post<Board>('leaderboard', { eventId: this.card.eventId }, { quiet });
+    } catch {
+      // The peek strip still opens the sheet if the board cannot be loaded.
     }
   }
 }

@@ -2016,6 +2016,7 @@ function scorecardFromBundle(
     bundle.event.handicapAllowance
   );
   const round = bundle.rounds.find(item => Number(item.id) === roundId);
+  const ownGroup = groupForViewer(bundle, viewerId);
   const base = {
     eventId: bundle.event.id,
     eventName: bundle.event.name,
@@ -2031,8 +2032,9 @@ function scorecardFromBundle(
     teams: bundle.teams,
     leaderboard: leaderboardFor(bundle),
     groups: role === 'organizer'
-      ? publicGroups(bundle).map(group => ({ groupId: group.groupId, label: group.label }))
+      ? bundle.groups.map(group => describeGroup(bundle, group, scored, ownGroup?.id ?? null))
       : [],
+    ownGroupId: ownGroup?.id ?? null,
     canPickGroup: false,
     groupId: null as number | null,
     groupLabel: null as string | null,
@@ -2188,6 +2190,44 @@ function formatTeeTime(value: string | null): string {
   const suffix = hour >= 12 ? 'PM' : 'AM';
   hour = hour % 12 || 12;
   return `${hour}:${match[2]} ${suffix}`;
+}
+
+function describeGroup(bundle: Bundle, group: GroupRow, scored: CompetitorTotal[], ownGroupId: number | null) {
+  const holes = mergeGroupHoles(competitorsInGroup(bundle, group, scored));
+  const startIndex = holes.findIndex(hole => (hole.displayHoleNumber ?? hole.sequence) === group.startingHole);
+  const start = startIndex >= 0 ? startIndex : 0;
+  const order = holes.map((_, index) => (start + index) % Math.max(holes.length, 1));
+  let lastPlayed = -1;
+  if (holes.length > 0) {
+    order.forEach((index, step) => {
+      if (holes[index].lines.some(line => line.gross != null)) lastPlayed = step;
+    });
+  }
+  const step = holes.length === 0 || lastPlayed < 0 ? 0 : Math.min(lastPlayed + 1, order.length - 1);
+  const current = holes[order[step]];
+  return {
+    groupId: group.id,
+    label: groupOptionLabel(group),
+    teeTime: formatTeeTime(group.teeTime),
+    names: groupPeople(bundle, group),
+    thru: holes.filter(hole => hole.lines.some(line => line.gross != null)).length,
+    currentHole: current ? (current.displayHoleNumber ?? current.sequence) : (group.startingHole || 1),
+    own: ownGroupId != null && group.id === ownGroupId,
+  };
+}
+
+function groupPeople(bundle: Bundle, group: GroupRow): string {
+  const names: string[] = [];
+  for (const member of group.members) {
+    if (member.teamId != null) {
+      const team = bundle.teams.find(item => item.teamId === member.teamId);
+      const name = (team?.name || member.displayName || '').trim();
+      if (name) names.push(name);
+    } else if (member.displayName) {
+      names.push(member.displayName);
+    }
+  }
+  return names.join(', ');
 }
 
 function groupPlace(group: GroupRow): string {

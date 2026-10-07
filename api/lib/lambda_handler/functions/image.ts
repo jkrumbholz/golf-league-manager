@@ -43,7 +43,12 @@ export const handler: Handler = async (event: any) => handle(event, async (body)
       Bucket: bucket,
       Key: key,
       Expires: 60,
-      Fields: { 'Content-Type': contentType },
+      Fields: {
+        'Content-Type': contentType,
+        // S3's default 204 has an empty body. Chrome reports that as "Failed to fetch"
+        // on a cross-origin upload, so ask for a 201 with an XML body instead.
+        success_action_status: '201',
+      },
       Conditions: [
         ['content-length-range', 1, MAX_BYTES],
         ['eq', '$Content-Type', contentType],
