@@ -24,13 +24,13 @@
       @if (!otherGroup && tickerOn) {
         <button class="peek peek-top" type="button" (click)="openSheet('leaderboard')">
           <span class="peek-label">Leaderboard</span>
-          @if (topFive.length === 0) {
+          @if (tickerRows.length === 0) {
             <span class="peek-pos">Not started</span>
           } @else {
             <span class="ticker">
-              <span class="ticker-track">
+              <span class="ticker-track" [style.animation-duration]="tickerDuration">
                 <span class="ticker-set">
-                  @for (row of topFive; track row.competitorId) {
+                  @for (row of tickerRows; track row.competitorId) {
                     <span class="ticker-item"><span class="ticker-name">{{ placeLabel(row) }} {{ row.name }}</span> <span class="ticker-score">{{ rowScore(row) }}</span></span>
                   }
                 </span>
@@ -191,17 +191,29 @@
             <p class="page-note">Tap any hole to jump back and fix a score.</p>
             @for (nine of nines(); track $index) {
               <div class="nine" [style.grid-template-columns]="nineColumns(nine)">
-                <span class="nine-label">Hole</span>
+                <span class="nine-label"><span>Hole</span></span>
                 @for (item of nine; track item.sequence) {
-                  <button type="button" (click)="jumpTo(item)">{{ courseHole(item) }}</button>
+                  <button class="nine-head" type="button" (click)="jumpTo(item)">{{ courseHole(item) }}</button>
                 }
-                <span class="nine-label">Par</span>
+                <span class="nine-label"><span>Par</span></span>
                 @for (item of nine; track item.sequence) {
                   <button type="button" (click)="jumpTo(item)">{{ item.par }}</button>
                 }
-                <span class="nine-label">{{ sheetName() }}</span>
-                @for (item of nine; track item.sequence) {
-                  <button type="button" [class]="grossClass(item)" (click)="jumpTo(item)">{{ viewerLine(item)?.gross ?? '' }}</button>
+                @for (row of sheetRows(); track row.key) {
+                  <span class="nine-label"><span>{{ row.name }}</span></span>
+                  @for (item of nine; track item.sequence) {
+                    <button type="button" class="nine-score" [class.under]="isUnder(item, row.key)" [class.over]="isOver(item, row.key)" (click)="jumpTo(item)">
+                      @if (sheetDots(item, row.key).length > 0) {
+                        <span class="sc-dots">
+                          @for (dot of sheetDots(item, row.key); track dot) { <span class="sc-dot"></span> }
+                        </span>
+                      }
+                      @if (sheetGive(item, row.key)) {
+                        <span class="sc-give">{{ sheetGive(item, row.key) }}</span>
+                      }
+                      {{ lineOn(item, row.key)?.gross ?? '' }}
+                    </button>
+                  }
                 }
               </div>
             }

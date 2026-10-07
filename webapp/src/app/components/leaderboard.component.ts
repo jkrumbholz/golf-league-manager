@@ -155,7 +155,7 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
 
   headline(): string {
     if (!this.board) return 'Leaderboard';
-    return `${this.board.eventName} · ${this.board.formatLabel}`;
+    return this.board.eventName;
   }
 
   /** "White/Blue · Thru 12 · Live" under the header. */

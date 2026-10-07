@@ -179,10 +179,14 @@ export class ScoreComponent implements OnInit {
     return this.card.groups.find(group => group.groupId === this.card?.groupId) ?? null;
   }
 
-  get topFive(): BoardRow[] {
-    return (this.board?.rows ?? [])
-      .filter(row => row.toPar != null || row.total != null)
-      .slice(0, 5);
+  get tickerRows(): BoardRow[] {
+    return this.board?.rows ?? [];
+  }
+
+  /** Same pace as the old five-name scroll, with a short wait after the last name. */
+  get tickerDuration(): string {
+    const seconds = Math.max(36, this.tickerRows.length * 7);
+    return `${seconds}s`;
   }
 
   placeLabel(row: BoardRow): string {
@@ -369,32 +373,46 @@ export class ScoreComponent implements OnInit {
   }
 
   nineColumns(nine: HoleView[]): string {
-    return `64px repeat(${nine.length}, minmax(28px, 1fr))`;
+    return `88px repeat(${nine.length}, minmax(32px, 1fr))`;
   }
 
-  viewerLine(hole: HoleView): HoleLine | null {
-    const id = this.auth.user()?.id;
-    if (id != null) {
-      const mine = hole.lines.find(line => line.userId === id);
-      if (mine) return mine;
-      const team = this.card?.teams.find(item => item.members?.some(member => member.userId === id));
-      const teamLine = team ? hole.lines.find(line => line.teamId === team.teamId) : null;
-      if (teamLine) return teamLine;
+  sheetRows(): Array<{ key: string; name: string }> {
+    if (!this.card) return [];
+    const seen = new Map<string, string>();
+    for (const hole of this.card.holes) {
+      for (const line of hole.lines) {
+        const key = this.lineKey(line);
+        if (!seen.has(key)) seen.set(key, line.displayName);
+      }
     }
-    return hole.lines[0] ?? null;
+    return [...seen.entries()].map(([key, name]) => ({ key, name }));
   }
 
-  sheetName(): string {
-    const hole = this.card?.holes.find(item => this.viewerLine(item));
-    return (hole && this.viewerLine(hole)?.displayName) || 'Score';
+  lineOn(hole: HoleView, key: string): HoleLine | null {
+    return hole.lines.find(line => this.lineKey(line) === key) ?? null;
   }
 
-  grossClass(hole: HoleView): string {
-    const gross = this.viewerLine(hole)?.gross;
-    if (gross == null) return '';
-    if (gross < hole.par) return 'under';
-    if (gross > hole.par) return 'over';
-    return '';
+  isUnder(hole: HoleView, key: string): boolean {
+    const gross = this.lineOn(hole, key)?.gross;
+    return gross != null && gross < hole.par;
+  }
+
+  isOver(hole: HoleView, key: string): boolean {
+    const gross = this.lineOn(hole, key)?.gross;
+    return gross != null && gross > hole.par;
+  }
+
+  sheetDots(hole: HoleView, key: string): number[] {
+    return this.strokeDots(this.lineOn(hole, key));
+  }
+
+  sheetGive(hole: HoleView, key: string): string {
+    const strokes = this.lineOn(hole, key)?.strokes ?? 0;
+    return strokes < 0 ? this.givenMarks(strokes) : '';
+  }
+
+  private lineKey(line: HoleLine): string {
+    return line.userId != null ? `u${line.userId}` : `t${line.teamId ?? 0}`;
   }
 
   scoreGroups(hole: HoleView): LineGroup[] {
@@ -444,8 +462,8 @@ export class ScoreComponent implements OnInit {
     return `${diff} over`;
   }
 
-  strokeDots(line: HoleLine): number[] {
-    const count = line.strokes > 0 ? line.strokes : 0;
+  strokeDots(line: HoleLine | null): number[] {
+    const count = line && line.strokes > 0 ? line.strokes : 0;
     return Array.from({ length: count }, (_, index) => index);
   }
 

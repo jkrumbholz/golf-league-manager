@@ -11,6 +11,7 @@
     }
 
     @if (board) {
+      <p class="section-label section-label-center">{{ board.formatLabel }}</p>
       <p class="section-label">{{ subtitle() }}</p>
 
       @if (board.rows.length === 0) {

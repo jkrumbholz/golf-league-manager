@@ -126,6 +126,11 @@ button, input, select, textarea { font-family: inherit; }
   color: var(--text-muted);
 }
 
+.section-label-center {
+  margin-top: 0;
+  text-align: center;
+}
+
 .league-head {
   display: flex;
   align-items: center;
@@ -1433,8 +1438,12 @@ a.sc-cell.sc-out .sc-gross { text-decoration: line-through; }
 
 .nine {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   margin: 0 12px 14px;
+  padding: 1px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(141, 156, 196, 0.35);
 }
 
 .nine button, .nine span {
@@ -1448,18 +1457,72 @@ a.sc-cell.sc-out .sc-gross { text-decoration: line-through; }
   cursor: pointer;
 }
 
-.nine-label {
+.nine > button,
+.nine > .nine-label {
+  background: var(--sheet-bg);
+}
+
+.nine button.nine-score {
+  position: relative;
+  padding-top: 12px;
+}
+
+.nine-score .sc-dots,
+.nine-score .sc-dot,
+.nine-score .sc-give {
+  min-height: 0;
+  padding: 0;
+  cursor: default;
+}
+
+.nine-score .sc-dots {
+  top: 2px;
+  right: 1px;
+  gap: 1px;
+}
+
+.nine-score .sc-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+}
+
+.nine-score .sc-give {
+  top: 0;
+  right: 1px;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.nine > .nine-label,
+.nine > button.nine-head {
+  background: #06101f;
+}
+
+.nine > .nine-label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 8px 0 10px;
   color: var(--text-muted);
   font-size: 11px;
   text-align: left;
   cursor: default;
+}
+
+.nine > .nine-label > span {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: default;
 }
 
-.nine .under { color: var(--accent); }
-.nine .over { color: var(--danger); }
+.nine .under { color: var(--danger); }
+.nine .over { color: var(--accent); }
 
 .group-pick {
   display: flex;
