@@ -3,6 +3,13 @@
     <app-shell nav="back" action="none" [title]="title" [backTo]="backTo"></app-shell>
 
     @if (card) {
+      @if (hole && hole.lines.length > 0) {
+        <div class="hole-nav score-links">
+          <button class="btn-secondary" type="button" [disabled]="saving" (click)="openScorecard()">Scorecard</button>
+          <button class="btn-secondary" type="button" [disabled]="saving" (click)="openLeaderboard()">Leaderboard</button>
+        </div>
+      }
+
       @if (card.canPickGroup) {
         <label class="field field-inline">
           <span class="field-label">Group</span>
@@ -12,9 +19,7 @@
             }
           </select>
         </label>
-      } @else if (card.groupLabel) {
-        <p class="section-label">{{ card.groupLabel }}</p>
-      } @else if (card.teams.length > 1) {
+      } @else if (card.teams.length > 1 && !card.groupLabel) {
         <label class="field field-inline">
           <span class="field-label">Team</span>
           <select name="teamId" [ngModel]="teamId" (ngModelChange)="changeTeam($event)">
@@ -30,9 +35,10 @@
       }
 
       @if (hole && hole.lines.length > 0) {
-        <a class="scorecard-link" href="" (click)="openScorecard($event)">Scorecard</a>
-
         <section class="tee-card">
+          @if (card.groupLabel && !card.canPickGroup) {
+            <p class="group-line">{{ card.groupLabel }}</p>
+          }
           <p class="hole-now">Hole {{ courseHole(hole) }} - Par {{ hole.par }}</p>
           @if (!showTeamTees(hole)) {
             <p class="tee-name" [style.color]="hole.teeColor || 'var(--text)'">{{ hole.teeName || 'Selected tee' }}</p>
@@ -110,7 +116,6 @@
         }
 
         <button class="btn-secondary clear-scores" type="button" [disabled]="saving || !hasScores || clearLocked" (click)="clearScores()">{{ clearLabel }}</button>
-        <button class="btn-secondary clear-scores" type="button" [disabled]="saving || !dirty" (click)="cancel()">Cancel</button>
 
         <div class="hole-nav">
           <button class="btn-secondary" type="button" [disabled]="saving || onFirstHole" (click)="previous()">Previous</button>
@@ -119,6 +124,7 @@
         @if (needsDecision) {
           <p class="page-note">Keep or discard each score before the next hole.</p>
         }
+        <button class="btn-secondary clear-scores" type="button" [disabled]="saving || !dirty" (click)="cancel()">Cancel</button>
       } @else if (card.holes.length === 0 && !card.notice) {
         <p class="page-note">This round has no holes yet. The organizer needs to save the course first.</p>
       }

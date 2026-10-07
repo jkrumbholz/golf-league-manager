@@ -77,6 +77,8 @@ interface Board {
   thru: number;
   holeCount: number;
   firstRoundId: number | null;
+  scoringEnabled?: boolean;
+  inField?: boolean;
   rows: BoardRow[];
   sideGames?: Array<{ label: string; name: string }>;
 }
@@ -268,6 +270,10 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
   isMe(row: BoardRow): boolean {
     const id = this.auth.user()?.id;
     return id != null && row.memberUserIds.includes(id);
+  }
+
+  get canScore(): boolean {
+    return !!this.board?.firstRoundId && !!this.board.inField && !!this.board.scoringEnabled;
   }
 
   get sideGames(): Array<{ label: string; name: string }> {

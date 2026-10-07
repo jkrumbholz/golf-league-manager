@@ -2,14 +2,25 @@
   <div class="screen-inner">
     <app-shell nav="back" action="menu" [title]="leagueName" [backTo]="['/leagues']"></app-shell>
 
-    @if (logoImageUrl) {
-      <img class="avatar avatar-logo league-logo" [src]="logoImageUrl" alt="" (error)="logoImageUrl = ''" />
+    @if (logoImageUrl || seasons.length > 0) {
+      <div class="league-head">
+        @if (logoImageUrl) {
+          <img class="avatar avatar-logo" [src]="logoImageUrl" alt="" (error)="logoImageUrl = ''" />
+        }
+        @if (seasons.length > 0) {
+          <div class="season-picker">
+            <select [ngModel]="seasonId" (ngModelChange)="changeSeason($event)" aria-label="Season">
+              @for (season of seasons; track season.id) {
+                <option [ngValue]="season.id">{{ season.name }}</option>
+              }
+            </select>
+          </div>
+        }
+      </div>
     }
 
     @switch (tab) {
       @case ('events') {
-        @if (seasonName) { <p class="section-label">{{ seasonName }}</p> }
-
         @if (liveEvent) {
           <section class="hero">
             <span class="pill">Live now</span>
@@ -53,15 +64,6 @@
         }
       }
 
-      @case ('standings') {
-        <p class="section-label">Season standings</p>
-        <p class="page-note">
-          Season standings are not calculated yet. Every event keeps its own leaderboard, so
-          decide how a season should be scored (points per finish, best n rounds, total strokes)
-          and it can be added here.
-        </p>
-      }
-
       @case ('players') {
         <p class="section-label">{{ members.length }} players</p>
         <div class="card">
@@ -83,7 +85,6 @@
   <nav class="tabbar">
     <div class="tabbar-inner">
       <a [routerLink]="['/leagues', leagueId]" [class.active]="tab === 'events'">Events</a>
-      <a [routerLink]="['/leagues', leagueId]" [queryParams]="{ tab: 'standings' }" [class.active]="tab === 'standings'">Standings</a>
       <a [routerLink]="['/leagues', leagueId]" [queryParams]="{ tab: 'players' }" [class.active]="tab === 'players'">Players</a>
     </div>
   </nav>

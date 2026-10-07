@@ -106,6 +106,7 @@ CREATE TABLE event (
     long_drive_enabled      BOOLEAN NOT NULL DEFAULT FALSE,
     long_drive_entry_fee    NUMERIC(10,2) NOT NULL DEFAULT 0,
     handicap_allowance      NUMERIC(5,1) NOT NULL DEFAULT 100,
+    scoring_enabled         BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at              TIMESTAMPTZ,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

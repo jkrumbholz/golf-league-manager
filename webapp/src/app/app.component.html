@@ -1,3 +1,6 @@
+@if (!config.isProdEnvironment()) {
+  <div class="dev-ribbon"><span>Dev</span></div>
+}
 @if (loading.active()) {
   <div class="loading-bar" role="progressbar" aria-label="Loading">
     <span></span>

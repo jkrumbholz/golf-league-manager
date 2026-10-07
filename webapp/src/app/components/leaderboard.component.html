@@ -159,9 +159,11 @@
         </div>
       }
 
-      @if (!broadcast && board.firstRoundId) {
+      @if (!broadcast && canScore) {
         <a class="btn-primary" [routerLink]="['/events', eventId, 'score', board.firstRoundId]">Enter my score</a>
         <a class="btn-secondary btn-block" [routerLink]="['/events', eventId, 'score', board.firstRoundId, 'card']">Scorecard</a>
+      } @else if (!broadcast && board.inField && !board.scoringEnabled) {
+        <p class="page-note">Scoring is closed for this event.</p>
       }
     }
 

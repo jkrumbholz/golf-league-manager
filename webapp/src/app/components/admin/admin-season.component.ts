@@ -39,7 +39,8 @@ export class AdminSeasonComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     this.seasonId = Number(this.route.snapshot.paramMap.get('seasonId'));
     try {
-      this.events = await this.api.post<SeasonEvent[]>('events', { seasonId: this.seasonId });
+      const events = await this.api.post<SeasonEvent[]>('events', { seasonId: this.seasonId });
+      this.events = events.sort((a, b) => b.startDate.localeCompare(a.startDate) || b.id - a.id);
       const facilityIds = [...new Set(this.events.map(event => event.facilityId).filter((id): id is number => id != null))];
       await Promise.all(facilityIds.map(id => this.courseNames.ensureConfigurations(id)));
       // An empty season has nothing to read the name from, so navigation passes it along.

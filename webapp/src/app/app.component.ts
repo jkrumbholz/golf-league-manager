@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { ConfigService } from './services/config.service';
 import { LoadingService } from './services/loading.service';
 import { DrawerComponent } from './ui/drawer.component';
 
@@ -10,5 +11,5 @@ import { DrawerComponent } from './ui/drawer.component';
   templateUrl: './app.component.html',
 })
 export class AppComponent {
-  constructor(readonly loading: LoadingService) {}
+  constructor(readonly loading: LoadingService, readonly config: ConfigService) {}
 }

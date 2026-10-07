@@ -37,6 +37,7 @@ export class AdminEventSettingsComponent extends AdminEventScreen implements OnI
         ctpEntryFee: Number(event.ctpEntryFee),
         longDriveEnabled: event.longDriveEnabled,
         longDriveEntryFee: Number(event.longDriveEntryFee),
+        scoringEnabled: event.scoringEnabled,
         facilityId: event.facilityId,
         courseConfigurationId: event.courseConfigurationId,
       });

@@ -46,6 +46,7 @@ export interface EventDetail {
   ctpEntryFee: number;
   longDriveEnabled: boolean;
   longDriveEntryFee: number;
+  scoringEnabled: boolean;
   facilityId: number | null;
   courseConfigurationId: number | null;
   leagueName: string;

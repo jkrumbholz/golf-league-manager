@@ -124,6 +124,38 @@ button, input, select, textarea { font-family: inherit; }
   color: var(--text-muted);
 }
 
+.league-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 16px 12px;
+}
+
+.season-picker {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.season-picker select {
+  appearance: none;
+  max-width: 100%;
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  background-color: var(--surface-from);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%238d9cc4' stroke-width='1.6' stroke-linecap='round' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 8px 34px 8px 14px;
+  cursor: pointer;
+}
+
 .page-note {
   margin: 14px 16px;
   color: var(--text-faint);
@@ -550,7 +582,6 @@ button.pill {
   border-radius: 10px;
 }
 
-.league-logo { margin: 0 16px 12px; }
 
 .file-button { position: relative; cursor: pointer; }
 
@@ -590,6 +621,55 @@ button.pill {
 }
 
 .drawer .drawer-logout { color: var(--danger); margin-top: 22px; }
+
+.drawer-split {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--divider);
+}
+
+.drawer .drawer-split > a {
+  width: auto;
+  border-bottom: 0;
+}
+
+.drawer .drawer-split > a:first-child { flex: 1; }
+
+.drawer .drawer-pop {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  flex: none;
+  padding: 0;
+  color: var(--accent);
+}
+
+.dev-ribbon {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  width: 92px;
+  height: 92px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.dev-ribbon span {
+  position: absolute;
+  top: 16px;
+  left: -30px;
+  width: 120px;
+  background: var(--accent);
+  color: var(--bg);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 20px;
+  text-transform: uppercase;
+  transform: rotate(-45deg);
+}
 
 /* ---------- leaderboard ---------- */
 
@@ -806,17 +886,6 @@ button.lb-row.lb-expandable { cursor: pointer; }
 
 /* ---------- scorecard ---------- */
 
-.scorecard-link {
-  display: block;
-  margin: 0 16px 12px;
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  text-decoration: none;
-}
-
 .sc {
   display: grid;
   margin-bottom: 8px;
@@ -921,6 +990,14 @@ a.sc-cell.sc-out .sc-gross { text-decoration: line-through; }
   padding: 18px;
   border-radius: var(--radius-card);
   background: linear-gradient(135deg, var(--surface-from), var(--surface-to));
+}
+
+.group-line {
+  margin: 0 0 12px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .hole-now {
@@ -1046,6 +1123,7 @@ a.sc-cell.sc-out .sc-gross { text-decoration: line-through; }
 }
 
 .hole-nav > * { flex: 1; }
+.hole-nav.score-links { margin: 0 16px 12px; }
 
 .inline-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
 

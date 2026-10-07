@@ -75,6 +75,10 @@
         </a>
       </div>
 
+      <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="setScoring(!dashboard.event.scoringEnabled)">
+        {{ dashboard.event.scoringEnabled ? 'Turn scoring off' : 'Turn scoring on' }}
+      </button>
+      <p class="page-note">{{ dashboard.event.scoringEnabled ? 'Players in this event can enter scores.' : 'Score entry is closed until you turn it on.' }}</p>
       <a class="btn-primary" [routerLink]="['/events', eventId]">View leaderboard</a>
       <button class="btn-quiet btn-danger btn-wide" type="button" [disabled]="busy" (click)="archive()">Archive event</button>
     }

@@ -20,6 +20,12 @@
           <span class="field-hint">100 uses the full index. 50 plays half the strokes. A plus index is reduced the same way.</span>
         </label>
 
+        <label class="field-check">
+          <input name="scoringEnabled" type="checkbox" [(ngModel)]="dashboard.event.scoringEnabled" />
+          <span>Scoring is open</span>
+        </label>
+        <p class="page-note">Leave this off until the round starts. Players in the event can enter scores only while it is on.</p>
+
         <p class="section-label">Side games</p>
 
         <label class="field-check">

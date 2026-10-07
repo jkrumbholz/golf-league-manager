@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../services/api.service';
 import { CourseNameService } from '../services/course-name.service';
@@ -23,19 +24,20 @@ interface LeagueEvent {
   courseConfigurationId: number | null;
 }
 
-type Tab = 'events' | 'standings' | 'players';
+type Tab = 'events' | 'players';
 
 @Component({
   selector: 'app-league-home',
   standalone: true,
-  imports: [RouterLink, ShellComponent],
+  imports: [FormsModule, RouterLink, ShellComponent],
   templateUrl: './league-home.component.html',
 })
 export class LeagueHomeComponent implements OnInit {
   leagueId = 0;
   leagueName = '';
   logoImageUrl = '';
-  seasonName = '';
+  seasons: Season[] = [];
+  seasonId = 0;
   tab: Tab = 'events';
   liveEvent: LeagueEvent | null = null;
   upcoming: LeagueEvent[] = [];
@@ -54,7 +56,7 @@ export class LeagueHomeComponent implements OnInit {
     this.leagueId = Number(this.route.snapshot.paramMap.get('leagueId'));
     this.route.queryParamMap.subscribe(params => {
       const tab = params.get('tab');
-      this.tab = tab === 'standings' || tab === 'players' ? tab : 'events';
+      this.tab = tab === 'players' ? tab : 'events';
     });
 
     try {
@@ -67,19 +69,36 @@ export class LeagueHomeComponent implements OnInit {
       this.leagueName = page.league.name;
       this.logoImageUrl = page.league.logoImageUrl || '';
       this.members = page.members;
-      const season = page.seasons.find(item => item.isActive) ?? page.seasons[0];
+      this.seasons = [...page.seasons].sort((a, b) => a.startDate.localeCompare(b.startDate));
+      const season = this.seasons.find(item => item.isActive) ?? this.seasons[0];
       if (!season) return;
-      this.seasonName = season.name;
-
-      const events = await this.api.post<LeagueEvent[]>('events', { seasonId: season.id });
-      this.liveEvent = events.find(event => event.status === 'live') ?? null;
-      this.upcoming = events.filter(event => event.status === 'upcoming');
-      this.past = events.filter(event => event.status === 'done').reverse();
-      const facilityIds = [...new Set(events.map(event => event.facilityId).filter((id): id is number => id != null))];
-      await Promise.all(facilityIds.map(id => this.courseNames.ensureConfigurations(id)));
+      this.seasonId = season.id;
+      await this.loadEvents();
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Could not load this league';
     }
+  }
+
+  async changeSeason(seasonId: number): Promise<void> {
+    this.seasonId = Number(seasonId);
+    this.error = '';
+    try {
+      await this.loadEvents();
+    } catch (error: unknown) {
+      this.error = error instanceof Error ? error.message : 'Could not load this season';
+    }
+  }
+
+  private async loadEvents(): Promise<void> {
+    this.liveEvent = null;
+    this.upcoming = [];
+    this.past = [];
+    const events = await this.api.post<LeagueEvent[]>('events', { seasonId: this.seasonId });
+    this.liveEvent = events.find(event => event.status === 'live') ?? null;
+    this.upcoming = events.filter(event => event.status === 'upcoming');
+    this.past = events.filter(event => event.status === 'done').reverse();
+    const facilityIds = [...new Set(events.map(event => event.facilityId).filter((id): id is number => id != null))];
+    await Promise.all(facilityIds.map(id => this.courseNames.ensureConfigurations(id)));
   }
 
   eventMeta(event: LeagueEvent): string {

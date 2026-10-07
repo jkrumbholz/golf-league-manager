@@ -76,6 +76,20 @@ export class AdminEventComponent implements OnInit {
     return `${players.length} signed up · ${paid} paid`;
   }
 
+  async setScoring(scoringEnabled: boolean): Promise<void> {
+    if (!this.dashboard || this.busy) return;
+    this.error = '';
+    this.busy = true;
+    try {
+      await this.api.put('event', { action: 'setScoring', id: this.eventId, scoringEnabled });
+      this.dashboard.event.scoringEnabled = scoringEnabled;
+    } catch (error: unknown) {
+      this.error = error instanceof Error ? error.message : 'Could not change scoring';
+    } finally {
+      this.busy = false;
+    }
+  }
+
   async archive(): Promise<void> {
     if (!this.dashboard || this.busy) return;
     const name = this.dashboard.event.name;

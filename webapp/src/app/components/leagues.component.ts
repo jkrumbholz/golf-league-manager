@@ -33,7 +33,6 @@ export class LeaguesComponent implements OnInit {
   }
 
   meta(league: LeagueSummary): string {
-    const players = `${league.playerCount} player${league.playerCount === 1 ? '' : 's'}`;
-    return league.currentSeasonName ? `${league.currentSeasonName} · ${players}` : players;
+    return `${league.playerCount} player${league.playerCount === 1 ? '' : 's'}`;
   }
 }

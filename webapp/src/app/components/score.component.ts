@@ -151,11 +151,15 @@ export class ScoreComponent implements OnInit {
     this.applyForced();
   }
 
-  async openScorecard(event: Event): Promise<void> {
-    event.preventDefault();
+  async openScorecard(): Promise<void> {
     if (!this.card || !(await this.persist())) return;
     const queryParams = this.card.groupId ? { group: this.card.groupId } : {};
     await this.router.navigate(['/events', this.card.eventId, 'score', this.roundId, 'card'], { queryParams });
+  }
+
+  async openLeaderboard(): Promise<void> {
+    if (!this.card || !(await this.persist())) return;
+    await this.router.navigate(['/events', this.card.eventId]);
   }
 
   async previous(): Promise<void> {

@@ -41,6 +41,7 @@ export const routes: Routes = [
     path: '',
     canActivate: [authGuard],
     children: [
+      { path: '', pathMatch: 'full', redirectTo: 'leagues' },
       { path: 'leagues', component: LeaguesComponent },
       { path: 'leagues/:leagueId', component: LeagueHomeComponent },
       { path: 'events/:eventId', component: LeaderboardComponent },
@@ -77,6 +78,5 @@ export const routes: Routes = [
       },
     ],
   },
-  { path: '', pathMatch: 'full', redirectTo: 'leagues' },
   { path: '**', redirectTo: 'leagues' },
 ];

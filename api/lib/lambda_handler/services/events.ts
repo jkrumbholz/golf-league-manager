@@ -50,6 +50,7 @@ interface EventRow {
   longDriveEnabled: boolean;
   longDriveEntryFee: number;
   handicapAllowance: number;
+  scoringEnabled: boolean;
 }
 
 interface RoundRow {
@@ -157,7 +158,11 @@ export async function listLeagues(client: Client, userId: number) {
           SELECT s.name
           FROM season s
           WHERE s.league_id = l.id
-          ORDER BY s.start_date DESC
+          ORDER BY
+            (CURRENT_DATE BETWEEN s.start_date AND s.end_date) DESC,
+            (s.end_date < CURRENT_DATE) DESC,
+            CASE WHEN s.end_date < CURRENT_DATE THEN s.start_date END DESC,
+            s.start_date ASC
           LIMIT 1
         ) AS "currentSeasonName",
         (SELECT COUNT(*) FROM season s WHERE s.league_id = l.id)::int AS "seasonCount",
@@ -670,6 +675,7 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
     longDriveEnabled: Boolean(body.longDriveEnabled),
     longDriveEntryFee: asNumber(body.longDriveEntryFee, 0),
     handicapAllowance: Math.min(100, Math.max(0, asNumber(body.handicapAllowance, 100) ?? 100)),
+    scoringEnabled: Boolean(body.scoringEnabled),
   };
 
   if (body.id) {
@@ -692,7 +698,8 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
             ctp_entry_fee = $12,
             long_drive_enabled = $13,
             long_drive_entry_fee = $14,
-            handicap_allowance = $15
+            handicap_allowance = $15,
+            scoring_enabled = $16
         WHERE id = $1
       `,
       [
@@ -711,6 +718,7 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
         values.longDriveEnabled,
         values.longDriveEntryFee,
         values.handicapAllowance,
+        values.scoringEnabled,
       ]
     );
     return { id: eventId };
@@ -726,9 +734,10 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
       INSERT INTO event (
         season_id, name, format, course_configuration_id, facility_id, entry_fee,
         start_date, end_date, players_pick_teams, team_size, signup_token,
-        ctp_enabled, ctp_entry_fee, long_drive_enabled, long_drive_entry_fee, handicap_allowance
+        ctp_enabled, ctp_entry_fee, long_drive_enabled, long_drive_entry_fee, handicap_allowance,
+        scoring_enabled
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       RETURNING id
     `,
     [
@@ -748,6 +757,7 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
       values.longDriveEnabled,
       values.longDriveEntryFee,
       values.handicapAllowance,
+      values.scoringEnabled,
     ]
   );
   const eventId = inserted.rows[0].id;
@@ -759,6 +769,17 @@ export async function saveEvent(client: Client, user: AuthUser, body: any) {
     [eventId, startDate, values.courseConfigurationId]
   );
   return { id: eventId };
+}
+
+export async function setEventScoring(client: Client, user: AuthUser, eventId: number, scoringEnabled: boolean) {
+  const leagueId = await leagueIdForEvent(client, eventId);
+  await assertOrganizer(client, leagueId, user.id);
+  const updated = await client.query(
+    `UPDATE event SET scoring_enabled = $2 WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+    [eventId, scoringEnabled]
+  );
+  if (updated.rows.length === 0) throw new HttpError('Event not found', 404);
+  return { id: eventId, scoringEnabled };
 }
 
 export async function archiveEvent(client: Client, user: AuthUser, eventId: number) {
@@ -1433,10 +1454,9 @@ export async function saveScores(client: Client, user: AuthUser, body: any) {
   const eventId = Number(round.rows[0].eventId);
   const bundle = await loadBundle(client, eventId);
   const role = await assertLeagueMember(client, bundle.event.leagueId, user.id);
+  if (!bundle.event.scoringEnabled) throw new HttpError('Scoring is closed for this event');
   const registered = bundle.registrations.some(row => row.userId === user.id);
-  if (role !== 'organizer' && !registered) {
-    throw new HttpError('Sign up before entering scores', 403);
-  }
+  if (!registered) throw new HttpError('Sign up before entering scores', 403);
 
   const holes = holesFor(bundle, roundId);
   const incoming: HoleGross[] = Array.isArray(body.scores) ? body.scores : [];
@@ -1516,7 +1536,7 @@ export async function getScorecard(client: Client, user: AuthUser, roundId: numb
   return scorecardFromBundle(bundle, roundId, teamId, groupId, user.id, role);
 }
 
-export async function getLeaderboard(client: Client, eventId: number) {
+export async function getLeaderboard(client: Client, eventId: number, viewerId: number | null = null) {
   const bundle = await loadBundle(client, eventId);
   const rows = orderLeaderboard(leaderboardFor(bundle).map(row => {
     const group = bundle.groups.find(item => item.members.some(member =>
@@ -1565,6 +1585,8 @@ export async function getLeaderboard(client: Client, eventId: number) {
     thru: rows.reduce((most, row) => Math.max(most, row.thru), 0),
     holeCount: bundle.holes.filter(hole => Number(hole.roundId) === Number(bundle.rounds[0]?.id)).length,
     firstRoundId: bundle.rounds[0]?.id ?? null,
+    scoringEnabled: Boolean(bundle.event.scoringEnabled),
+    inField: viewerId != null && bundle.registrations.some(row => Number(row.userId) === viewerId),
     rows,
     sideGames: sideGameWinners(bundle),
   };
@@ -1730,7 +1752,8 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
         e.ctp_entry_fee::float AS "ctpEntryFee",
         e.long_drive_enabled AS "longDriveEnabled",
         e.long_drive_entry_fee::float AS "longDriveEntryFee",
-        e.handicap_allowance::float AS "handicapAllowance"
+        e.handicap_allowance::float AS "handicapAllowance",
+        e.scoring_enabled AS "scoringEnabled"
       FROM event e
       JOIN season s ON s.id = e.season_id
       JOIN league l ON l.id = s.league_id
@@ -1915,6 +1938,7 @@ function publicEvent(event: EventRow) {
     ctpEntryFee: event.ctpEntryFee,
     longDriveEnabled: event.longDriveEnabled,
     longDriveEntryFee: event.longDriveEntryFee,
+    scoringEnabled: Boolean(event.scoringEnabled),
   };
 }
 
@@ -2018,6 +2042,10 @@ function scorecardFromBundle(
     competitorName: null as string | null,
     holes: [] as ReturnType<typeof mergeGroupHoles>,
   };
+
+  const inField = bundle.registrations.some(row => Number(row.userId) === viewerId);
+  if (!inField) return { ...base, notice: "You're not playing this event." };
+  if (!bundle.event.scoringEnabled) return { ...base, notice: 'Scoring is closed for this event.' };
 
   if (bundle.groups.length === 0) {
     const viewerTeam = bundle.teams.find(team => team.members.some(member => member.userId === viewerId));
