@@ -1,4 +1,4 @@
-@if (!config.isProdEnvironment()) {
+@if (showDevRibbon && !config.isProdEnvironment()) {
   <div class="dev-ribbon"><span>Dev</span></div>
 }
 @if (loading.active()) {

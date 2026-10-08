@@ -11,5 +11,8 @@ import { DrawerComponent } from './ui/drawer.component';
   templateUrl: './app.component.html',
 })
 export class AppComponent {
+  /** Corner ribbon on the dev site. Flip this back on when it should show again. */
+  readonly showDevRibbon = false;
+
   constructor(readonly loading: LoadingService, readonly config: ConfigService) {}
 }

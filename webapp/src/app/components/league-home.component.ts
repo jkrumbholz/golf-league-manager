@@ -4,6 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../services/api.service';
 import { CourseNameService } from '../services/course-name.service';
 import { formatHandicapIndex } from '../models/handicap';
+import { FaceComponent } from '../ui/face.component';
 import { ShellComponent } from '../ui/shell.component';
 
 interface Season {
@@ -29,7 +30,7 @@ type Tab = 'events' | 'players';
 @Component({
   selector: 'app-league-home',
   standalone: true,
-  imports: [FormsModule, RouterLink, ShellComponent],
+  imports: [FormsModule, RouterLink, ShellComponent, FaceComponent],
   templateUrl: './league-home.component.html',
 })
 export class LeagueHomeComponent implements OnInit {
@@ -42,7 +43,7 @@ export class LeagueHomeComponent implements OnInit {
   liveEvent: LeagueEvent | null = null;
   upcoming: LeagueEvent[] = [];
   past: LeagueEvent[] = [];
-  members: Array<{ userId: number; displayName: string; role: string; handicapIndex: number }> = [];
+  members: Array<{ userId: number; displayName: string; role: string; handicapIndex: number; profilePictureUrl?: string | null }> = [];
   readonly formatIndex = formatHandicapIndex;
   error = '';
 
@@ -63,7 +64,7 @@ export class LeagueHomeComponent implements OnInit {
       const page = await this.api.post<{
         league: { name: string; logoImageUrl: string | null };
         seasons: Season[];
-        members: Array<{ userId: number; displayName: string; role: string; handicapIndex: number }>;
+        members: Array<{ userId: number; displayName: string; role: string; handicapIndex: number; profilePictureUrl?: string | null }>;
       }>('seasons', { leagueId: this.leagueId });
 
       this.leagueName = page.league.name;
@@ -77,6 +78,10 @@ export class LeagueHomeComponent implements OnInit {
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Could not load this league';
     }
+  }
+
+  get hasFaces(): boolean {
+    return this.members.some(member => !!member.profilePictureUrl);
   }
 
   async changeSeason(seasonId: number): Promise<void> {

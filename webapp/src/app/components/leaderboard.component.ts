@@ -4,7 +4,9 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../services/api.service';
 import { AuthService } from '../services/auth.service';
 import { ConfigService } from '../services/config.service';
+import { MembershipService } from '../services/membership.service';
 import { CourseNameService } from '../services/course-name.service';
+import { FaceComponent } from '../ui/face.component';
 import { ShellComponent } from '../ui/shell.component';
 
 interface KeepProgress {
@@ -59,6 +61,7 @@ interface BoardRow {
   startingHole?: number | null;
   currentTeeName: string | null;
   memberUserIds: number[];
+  photos?: string[];
   keeps?: KeepProgress[] | null;
   card?: PlayedHole[];
   tiebreaker?: Tiebreaker | null;
@@ -80,22 +83,27 @@ interface Board {
   scoringEnabled?: boolean;
   inField?: boolean;
   rows: BoardRow[];
+  winners?: Array<{ place: number; name: string; photos: string[] }>;
+  closestToPin?: { name: string; photos: string[] } | null;
   sideGames?: Array<{ label: string; name: string }>;
 }
 
 @Component({
   selector: 'app-leaderboard',
   standalone: true,
-  imports: [NgClass, RouterLink, ShellComponent],
+  imports: [NgClass, RouterLink, ShellComponent, FaceComponent],
   templateUrl: './leaderboard.component.html',
 })
 export class LeaderboardComponent implements OnInit, OnDestroy {
   eventId = 0;
   /** The public broadcast view drops the app chrome so it can live on a TV. */
   broadcast = false;
+  tab: 'results' | 'leaderboard' = 'results';
+  eventOrganizer = false;
   board: Board | null = null;
   error = '';
   private expandedId: number | null = null;
+  private organizerKnown = false;
   tieRow: BoardRow | null = null;
   private timer = 0;
 
@@ -103,6 +111,7 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private api: ApiService,
     private auth: AuthService,
+    private membership: MembershipService,
     private config: ConfigService,
     private courseNames: CourseNameService
   ) {}
@@ -115,6 +124,10 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopRefreshing();
+  }
+
+  get hasFaces(): boolean {
+    return !!this.board?.rows.some(row => (row.photos?.length ?? 0) > 0);
   }
 
   holeLabel(row: BoardRow): string {
@@ -275,6 +288,38 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     return !!this.board?.firstRoundId && !!this.board.inField && !!this.board.scoringEnabled;
   }
 
+  placeLabel(place: number): string {
+    if (place === 1) return '1st place';
+    if (place === 2) return '2nd place';
+    if (place === 3) return '3rd place';
+    return `Place ${place}`;
+  }
+
+  /** Place payouts are recorded, so the event page splits into Results and Leaderboard. */
+  get placesDecided(): boolean {
+    return this.winners.length > 0;
+  }
+
+  get showResults(): boolean {
+    return this.placesDecided && this.tab === 'results';
+  }
+
+  get showLeaderboard(): boolean {
+    return !this.placesDecided || this.tab === 'leaderboard';
+  }
+
+  get winners(): Array<{ place: number; name: string; photos: string[] }> {
+    return this.board?.winners ?? [];
+  }
+
+  get pinWinner(): { name: string; photos: string[] } | null {
+    return this.board?.closestToPin ?? null;
+  }
+
+  get showWinnerFaces(): boolean {
+    return this.winners.some(winner => winner.photos.length > 0) || (this.pinWinner?.photos.length ?? 0) > 0;
+  }
+
   get sideGames(): Array<{ label: string; name: string }> {
     return this.board?.sideGames ?? [];
   }
@@ -283,16 +328,33 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     return this.board ? ['/leagues', this.board.leagueId] : ['/leagues'];
   }
 
+  get adminHref(): string {
+    return `/admin/events/${this.eventId}`;
+  }
+
   private async refresh(quiet = false): Promise<void> {
     try {
       const board = await this.api.post<Board>('leaderboard', { eventId: this.eventId }, { quiet });
       await this.courseNames.ensureConfigurations(board.facilityId);
       this.board = board;
       this.error = '';
+      void this.loadOrganizer();
       this.syncRefresh();
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Leaderboard unavailable';
       this.syncRefresh();
+    }
+  }
+
+  private async loadOrganizer(): Promise<void> {
+    if (this.organizerKnown || this.broadcast || !this.auth.user()) return;
+    this.organizerKnown = true;
+    try {
+      const leagues = await this.membership.leagues();
+      const leagueId = this.board?.leagueId;
+      this.eventOrganizer = leagues.some(league => league.id === leagueId && league.role === 'organizer');
+    } catch {
+      this.eventOrganizer = false;
     }
   }
 

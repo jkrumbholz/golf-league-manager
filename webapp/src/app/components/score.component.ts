@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../services/api.service';
 import { AuthService } from '../services/auth.service';
+import { FaceComponent } from '../ui/face.component';
 
 interface HoleLine {
   userId: number | null;
@@ -74,6 +75,7 @@ interface BoardRow {
   toPar: number | null;
   lastHole: number | null;
   memberUserIds: number[];
+  photos?: string[];
 }
 
 interface Board {
@@ -90,7 +92,7 @@ interface LineGroup {
 @Component({
   selector: 'app-score',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, FaceComponent],
   templateUrl: './score.component.html',
 })
 export class ScoreComponent implements OnInit {
@@ -181,6 +183,10 @@ export class ScoreComponent implements OnInit {
 
   get tickerRows(): BoardRow[] {
     return this.board?.rows ?? [];
+  }
+
+  get hasFaces(): boolean {
+    return this.tickerRows.some(row => (row.photos?.length ?? 0) > 0);
   }
 
   /** Same pace as the old five-name scroll, with a short wait after the last name. */

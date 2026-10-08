@@ -4,6 +4,7 @@ import { ApiService } from '../../services/api.service';
 import { CourseNameService } from '../../services/course-name.service';
 import { ImageService } from '../../services/image.service';
 import { formatHandicapIndex } from '../../models/handicap';
+import { FaceComponent } from '../../ui/face.component';
 import { ShellComponent } from '../../ui/shell.component';
 
 interface Season {
@@ -22,12 +23,13 @@ interface Member {
   displayName: string;
   role: string;
   handicapIndex: number;
+  profilePictureUrl?: string | null;
 }
 
 @Component({
   selector: 'app-admin-league',
   standalone: true,
-  imports: [RouterLink, ShellComponent],
+  imports: [RouterLink, ShellComponent, FaceComponent],
   templateUrl: './admin-league.component.html',
 })
 export class AdminLeagueComponent implements OnInit {
@@ -74,6 +76,10 @@ export class AdminLeagueComponent implements OnInit {
 
   dateRange(season: Season): string {
     return this.courseNames.dateRange(season.startDate, season.endDate);
+  }
+
+  get hasFaces(): boolean {
+    return this.members.some(member => !!member.profilePictureUrl);
   }
 
   memberRole(member: Member): string {

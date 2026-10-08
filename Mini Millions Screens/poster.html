@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini Millions is now on your phone</title>
+  <style>
+    :root {
+      --bg: #0d1b3e;
+      --card: #16295c;
+      --ink: #ffffff;
+      --muted: #8d9cc4;
+      --gold: #f5c518;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #071228;
+      color: var(--ink);
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+
+    .poster {
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--bg);
+      padding: 48px 28px 64px;
+    }
+
+    header { text-align: center; }
+
+    h1 {
+      margin: 10px 0 0;
+      color: var(--gold);
+      font-size: clamp(32px, 5.5vw, 52px);
+      line-height: 0.95;
+      letter-spacing: -0.02em;
+      text-transform: uppercase;
+    }
+
+    .lede {
+      max-width: 34rem;
+      margin: 16px auto 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.45;
+    }
+
+    .feature {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 28px;
+      align-items: center;
+      margin-top: 48px;
+    }
+
+    .feature.reverse { direction: rtl; }
+    .feature.reverse > * { direction: ltr; }
+
+    .phone {
+      width: 240px;
+      margin: 0 auto;
+      padding: 10px;
+      border-radius: 28px;
+      background: #07101f;
+      border: 1px solid #2b3d70;
+    }
+
+    .phone img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 18px;
+    }
+
+    .step {
+      margin: 0 0 8px;
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+
+    p { margin: 12px 0 0; font-size: 17px; line-height: 1.45; }
+
+    .start {
+      margin-top: 56px;
+      padding: 28px 24px;
+      border-radius: 18px;
+      background: var(--card);
+      text-align: center;
+    }
+
+    .start h2 { font-size: 28px; }
+
+    footer {
+      margin-top: 28px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 700px) {
+      .poster { padding: 32px 16px 48px; }
+      .feature,
+      .feature.reverse {
+        grid-template-columns: 1fr;
+        direction: ltr;
+        text-align: center;
+      }
+      .phone { width: min(240px, 70vw); }
+    }
+
+    @media print {
+      body { background: var(--bg); }
+      .poster { max-width: none; }
+      .feature { break-inside: avoid; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <article class="poster">
+    <header>
+      <h1>Mini Millions is now on your phone</h1>
+      <p class="lede">See the night, post your score, and follow the field. When the round is over, the winners are right at the top.</p>
+    </header>
+
+    <section class="feature">
+      <div class="phone">
+        <img src="Screen Shot 2026-10-08 at 9.00.13 AM.png" alt="Mini Millions home, with a live event and the season list" />
+      </div>
+      <div>
+        <p class="step">Home</p>
+        <h2>The whole season in one place</h2>
+        <p>Tonight’s event is the big card at the top. Upcoming nights and finished rounds sit underneath. Switch seasons from the menu, and open Players to see the league.</p>
+      </div>
+    </section>
+
+    <section class="feature reverse">
+      <div class="phone">
+        <img src="Screen Shot 2026-10-08 at 9.02.06 AM.png" alt="Score entry for hole 18, with plus and minus buttons" />
+      </div>
+      <div>
+        <p class="step">During the round</p>
+        <h2>Enter a score in a couple of taps</h2>
+        <p>Open the hole, tap plus or minus, and move on. A birdie, par, or bogey shows under the number. The leaderboard ticker runs across the top while you play.</p>
+      </div>
+    </section>
+
+    <section class="feature">
+      <div class="phone">
+        <img src="Screen Shot 2026-10-08 at 9.02.35 AM.png" alt="Scorecard with circled birdies and squared bogeys" />
+      </div>
+      <div>
+        <p class="step">Your card</p>
+        <h2>See the round, then fix a hole</h2>
+        <p>Under par is a circle. Over par is a square. A gold dot marks a stroke. Tap any hole to jump back and change a score.</p>
+      </div>
+    </section>
+
+    <section class="feature reverse">
+      <div class="phone">
+        <img src="Screen Shot 2026-10-08 at 9.00.52 AM.png" alt="Leaderboard with team photos and scores to par" />
+      </div>
+      <div>
+        <p class="step">While it’s live</p>
+        <h2>Follow the field</h2>
+        <p>Names, photos, and the score to par update as groups post. A team of two shares one circle. Tap a row to open that card.</p>
+      </div>
+    </section>
+
+    <section class="feature">
+      <div class="phone">
+        <img src="Screen Shot 2026-10-08 at 9.00.42 AM.png" alt="Results with gold and silver trophies and closest to the pin" />
+      </div>
+      <div>
+        <p class="step">When it’s over</p>
+        <h2>Winners, photos, and the pin</h2>
+        <p>First and second get the trophies. Closest to the pin is on the same list, with a flag in the hole. The full leaderboard is one tab away.</p>
+      </div>
+    </section>
+
+    <section class="start">
+      <h2>Contact Krummy to setup your account</h2>
+    </section>
+
+    <footer>Mini Millions · 2026 season</footer>
+  </article>
+</body>
+</html>
