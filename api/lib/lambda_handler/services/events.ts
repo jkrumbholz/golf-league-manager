@@ -87,6 +87,7 @@ interface RegistrationRow {
   lastName: string;
   handicapIndex: number;
   profileHandicapIndex: number;
+  profilePictureUrl: string | null;
   paid: boolean;
   ctpEntered: boolean;
   longDriveEntered: boolean;
@@ -113,6 +114,8 @@ interface Bundle {
   teeSets: TeeRow[];
   holes: HoleRow[];
   registrations: RegistrationRow[];
+  /** Profile photo URL by user id. Empty when that player has not uploaded one. */
+  photos: Map<number, string>;
   teams: Array<TeamSetup & { members: PlayerSetup[] }>;
   groups: GroupRow[];
   scores: Array<HoleGross & { roundId: number }>;
@@ -549,7 +552,8 @@ export async function listSeasons(client: Client, user: AuthUser, leagueId: numb
     `
       SELECT u.id AS "userId", u.username, u.first_name AS "firstName", u.last_name AS "lastName",
              u.display_name AS "displayName", m.role,
-             u.handicap_index::float AS "handicapIndex"
+             u.handicap_index::float AS "handicapIndex",
+             u.profile_picture_url AS "profilePictureUrl"
       FROM league_member m
       JOIN app_user u ON u.id = m.user_id
       WHERE m.league_id = $1
@@ -1569,6 +1573,7 @@ export async function getLeaderboard(client: Client, eventId: number, viewerId: 
       detailName: nameWithHandicap(bundle, row),
       lastHole: latestPlayedHole(card ?? [], startingHole) ?? row.lastHole,
       card: played,
+      photos: photosFor(bundle, row.memberUserIds),
     };
   });
   const today = new Date().toISOString().slice(0, 10);
@@ -1595,22 +1600,46 @@ export async function getLeaderboard(client: Client, eventId: number, viewerId: 
     scoringEnabled: Boolean(bundle.event.scoringEnabled),
     inField: viewerId != null && bundle.registrations.some(row => Number(row.userId) === viewerId),
     rows,
+    winners: placeWinners(bundle),
+    closestToPin: pinWinner(bundle),
     sideGames: sideGameWinners(bundle),
   };
 }
 
+function placeWinners(bundle: Bundle): Array<{ place: number; name: string; photos: string[] }> {
+  return bundle.payouts
+    .filter(payout => {
+      const place = Number(payout.place);
+      return place >= 1 && place <= 3 && (payout.userId != null || payout.teamId != null);
+    })
+    .sort((a, b) => Number(a.place) - Number(b.place) || a.id - b.id)
+    .map(payout => {
+      if (payout.teamId != null) {
+        const team = bundle.teams.find(item => item.teamId === Number(payout.teamId));
+        const members = team?.members ?? [];
+        const name = members.map(member => member.displayName).filter(part => part.length > 0).join(' / ') || team?.name || 'Team';
+        return { place: Number(payout.place), name, photos: photosFor(bundle, members.map(member => member.userId)) };
+      }
+      const userId = Number(payout.userId);
+      const player = bundle.registrations.find(row => Number(row.userId) === userId);
+      return { place: Number(payout.place), name: player?.displayName || 'Player', photos: photosFor(bundle, [userId]) };
+    });
+}
+
+function pinWinner(bundle: Bundle): { name: string; photos: string[] } | null {
+  const userId = bundle.sideGames.closestToPinWinnerUserId;
+  if (userId == null) return null;
+  const player = bundle.registrations.find(row => Number(row.userId) === Number(userId));
+  if (!player) return null;
+  return { name: player.displayName, photos: photosFor(bundle, [Number(userId)]) };
+}
+
 function sideGameWinners(bundle: Bundle): Array<{ label: string; name: string }> {
-  const nameOf = (userId: number | null) => {
-    if (userId == null) return null;
-    const player = bundle.registrations.find(row => Number(row.userId) === Number(userId));
-    return player?.displayName ?? null;
-  };
-  const winners: Array<{ label: string; name: string }> = [];
-  const closest = nameOf(bundle.sideGames.closestToPinWinnerUserId);
-  const drive = nameOf(bundle.sideGames.longDriveWinnerUserId);
-  if (closest) winners.push({ label: 'Closest to the pin', name: closest });
-  if (drive) winners.push({ label: 'Long drive', name: drive });
-  return winners;
+  const userId = bundle.sideGames.longDriveWinnerUserId;
+  if (userId == null) return [];
+  const player = bundle.registrations.find(row => Number(row.userId) === Number(userId));
+  if (!player) return [];
+  return [{ label: 'Long drive', name: player.displayName }];
 }
 
 export async function getDashboard(client: Client, user: AuthUser, eventId: number) {
@@ -1810,6 +1839,7 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
                u.first_name AS "firstName", u.last_name AS "lastName",
                r.handicap_index::float AS "handicapIndex",
                u.handicap_index::float AS "profileHandicapIndex",
+               u.profile_picture_url AS "profilePictureUrl",
                r.paid, r.ctp_entered AS "ctpEntered", r.long_drive_entered AS "longDriveEntered",
                r.ctp_paid AS "ctpPaid", r.long_drive_paid AS "longDrivePaid"
         FROM event_registration r
@@ -1823,7 +1853,8 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
     client.query(
       `
         SELECT tm.team_id AS "teamId", tm.user_id AS "userId", u.display_name AS "displayName",
-               u.handicap_index::float AS "handicapIndex"
+               u.handicap_index::float AS "handicapIndex",
+               u.profile_picture_url AS "profilePictureUrl"
         FROM team_member tm
         JOIN team t ON t.id = tm.team_id
         JOIN app_user u ON u.id = tm.user_id
@@ -1922,12 +1953,34 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
     teeSets: teeSets.rows,
     holes: holes.rows,
     registrations: registrations.rows,
+    photos: profilePhotos(registrations.rows, memberRows.rows),
     teams,
     groups,
     scores: scores.rows,
     payouts: payouts.rows,
     sideGames: side,
   };
+}
+
+function profilePhotos(
+  registrations: Array<{ userId: number; profilePictureUrl?: string | null }>,
+  members: Array<{ userId: number; profilePictureUrl?: string | null }>
+): Map<number, string> {
+  const photos = new Map<number, string>();
+  for (const row of [...registrations, ...members]) {
+    const url = String(row.profilePictureUrl || '').trim();
+    if (url) photos.set(Number(row.userId), url);
+  }
+  return photos;
+}
+
+function photosFor(bundle: Bundle, userIds: number[]): string[] {
+  const urls: string[] = [];
+  for (const id of userIds) {
+    const url = bundle.photos.get(Number(id));
+    if (url && !urls.includes(url)) urls.push(url);
+  }
+  return urls;
 }
 
 function publicEvent(event: EventRow) {

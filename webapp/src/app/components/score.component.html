@@ -31,7 +31,11 @@
               <span class="ticker-track" [style.animation-duration]="tickerDuration">
                 <span class="ticker-set">
                   @for (row of tickerRows; track row.competitorId) {
-                    <span class="ticker-item"><span class="ticker-name">{{ placeLabel(row) }} {{ row.name }}</span> <span class="ticker-score">{{ rowScore(row) }}</span></span>
+                    <span class="ticker-item">
+                      <app-face size="sm" [urls]="row.photos"></app-face>
+                      <span class="ticker-name">{{ placeLabel(row) }} {{ row.name }}</span>
+                      <span class="ticker-score">{{ rowScore(row) }}</span>
+                    </span>
                   }
                 </span>
               </span>
@@ -139,7 +143,7 @@
             <p class="score-warn">Keep or discard each score before the next hole.</p>
           }
           <div class="score-nav">
-            <button class="score-prev" type="button" [disabled]="onFirstHole" (click)="previous()" aria-label="Previous hole">&#8249;</button>
+            <button class="score-prev" type="button" [disabled]="onFirstHole" (click)="previous()"><span aria-hidden="true">&#8249;</span> Previous Hole</button>
             <button class="score-next" type="button" [disabled]="needsDecision" (click)="next()">{{ nextLabel }}</button>
           </div>
         </div>
@@ -183,6 +187,11 @@
             @for (row of board?.rows ?? []; track row.competitorId) {
               <div class="peek-row" [class.mine]="isMe(row)">
                 <span class="peek-rank">{{ row.rank }}</span>
+                @if (hasFaces) {
+                  <span class="face-slot">
+                    <app-face [urls]="row.photos"></app-face>
+                  </span>
+                }
                 <span class="peek-name">{{ row.name }}</span>
                 <span class="peek-score">{{ rowScore(row) }}</span>
               </div>

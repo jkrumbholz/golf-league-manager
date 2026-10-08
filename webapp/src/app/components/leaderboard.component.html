@@ -11,9 +11,69 @@
     }
 
     @if (board) {
-      <p class="section-label section-label-center">{{ board.formatLabel }}</p>
+      <div class="format-line">
+        <span></span>
+        <p class="section-label">{{ board.formatLabel }}</p>
+        <span class="format-side">
+          @if (eventOrganizer) {
+            <a class="format-admin" [href]="adminHref" target="_blank" rel="noopener">Admin</a>
+          }
+        </span>
+      </div>
       <p class="section-label">{{ subtitle() }}</p>
 
+      @if (placesDecided) {
+        <nav class="tabs">
+          <button type="button" class="tab" [class.tab-active]="tab === 'results'" (click)="tab = 'results'">Results</button>
+          <button type="button" class="tab" [class.tab-active]="tab === 'leaderboard'" (click)="tab = 'leaderboard'">Leaderboard</button>
+        </nav>
+      }
+
+      @if (showResults) {
+        <div class="card">
+          @for (winner of winners; track $index) {
+            <div class="row row-static">
+              <span class="medal" [class.medal-gold]="winner.place === 1" [class.medal-silver]="winner.place === 2" [class.medal-bronze]="winner.place === 3" [attr.aria-label]="placeLabel(winner.place)">
+                <svg viewBox="0 0 32 32" aria-hidden="true">
+                  <path fill="currentColor" d="M11 3h10v3.4c0 2.7-1.8 5-4.2 5.6L17.1 15h2.4v2.2h-7V15h2.4l.3-3C12.8 11.4 11 9.1 11 6.4V3z"/>
+                  <path fill="currentColor" d="M11 5.4H8c.4 2.2 1.7 3.6 3.5 4v-1.8c-.9-.3-1.5-1.1-1.6-2.2H11zm10 0h3c-.4 2.2-1.7 3.6-3.5 4V7.6c.9-.3 1.5-1.1 1.6-2.2H21z"/>
+                  <path fill="currentColor" d="M12.6 18.6h6.8v2h-6.8zm-1.6 2.8h10v2.2h-10z"/>
+                </svg>
+              </span>
+              @if (showWinnerFaces) {
+                <span class="face-slot">
+                  <app-face [urls]="winner.photos"></app-face>
+                </span>
+              }
+              <span class="row-body">
+                <span class="row-title">{{ winner.name }}</span>
+              </span>
+            </div>
+          }
+          @if (pinWinner) {
+            <div class="row row-static">
+              <span class="medal medal-pin" aria-label="Closest to the pin">
+                <svg viewBox="0 0 32 32" aria-hidden="true">
+                  <path fill="#f5c518" d="M15.2 4.6 26.4 9.6 15.2 14.6z"/>
+                  <path fill="currentColor" d="M13.6 4h2.2v19.2h-2.2z"/>
+                  <path fill="currentColor" d="M8 25.4c1.3-1.7 3.8-2.8 6.7-2.8s5.4 1.1 6.7 2.8c-1.3 1.7-3.8 2.8-6.7 2.8s-5.4-1.1-6.7-2.8z"/>
+                </svg>
+              </span>
+              @if (showWinnerFaces) {
+                <span class="face-slot">
+                  <app-face [urls]="pinWinner.photos"></app-face>
+                </span>
+              }
+              <span class="row-body">
+                <span class="row-title">{{ pinWinner.name }}</span>
+                <span class="row-meta">Closest to the pin</span>
+              </span>
+            </div>
+          }
+        </div>
+      }
+
+      @if (showLeaderboard) {
       @if (board.rows.length === 0) {
         <p class="page-note">No scores yet.</p>
       } @else {
@@ -23,10 +83,17 @@
               <button type="button" class="lb-row lb-expandable" [class.row-highlight]="isMe(row)" [attr.aria-expanded]="isOpen(row)" (click)="toggle(row)">
                 <span class="lb-rank">{{ row.rank }}</span>
                 <span class="lb-name">
-                  {{ row.name }}
-                  @if (board.usesRunningTee && row.currentTeeName) {
-                    <span class="lb-tee">{{ row.currentTeeName }}</span>
+                  @if (hasFaces) {
+                    <span class="face-slot">
+                      <app-face [urls]="row.photos"></app-face>
+                    </span>
                   }
+                  <span class="lb-name-text">
+                    {{ row.name }}
+                    @if (board.usesRunningTee && row.currentTeeName) {
+                      <span class="lb-tee">{{ row.currentTeeName }}</span>
+                    }
+                  </span>
                 </span>
                 <span class="lb-topar" [class.lb-ns]="noScore(row)">{{ scoreLabel(row) }}</span>
                 <span class="lb-hole" [class.lb-time]="row.lastHole == null && !!row.teeTime" [class.lb-warn]="missingTeeTime(row)">{{ holeLabel(row) }}</span>
@@ -165,6 +232,7 @@
         <a class="btn-secondary btn-block" [routerLink]="['/events', eventId, 'score', board.firstRoundId, 'card']">Scorecard</a>
       } @else if (!broadcast && board.inField && !board.scoringEnabled) {
         <p class="page-note">Scoring is closed for this event.</p>
+      }
       }
     }
 

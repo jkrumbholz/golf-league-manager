@@ -69,6 +69,11 @@
         <div class="card">
           @for (member of members; track member.userId) {
             <div class="row row-static">
+              @if (hasFaces) {
+                <span class="face-slot">
+                  <app-face [urls]="member.profilePictureUrl ? [member.profilePictureUrl] : []"></app-face>
+                </span>
+              }
               <span class="row-body">
                 <span class="row-title">{{ member.displayName }}</span>
                 <span class="row-meta">{{ member.role }} · {{ formatIndex(member.handicapIndex) }} index</span>
