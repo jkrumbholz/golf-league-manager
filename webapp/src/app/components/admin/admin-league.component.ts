@@ -24,6 +24,7 @@ interface Member {
   role: string;
   handicapIndex: number;
   profilePictureUrl?: string | null;
+  hasPassword?: boolean;
 }
 
 @Component({

@@ -83,6 +83,7 @@ interface Board {
   scoringEnabled?: boolean;
   inField?: boolean;
   rows: BoardRow[];
+  field?: Array<{ userId: number; name: string; photos: string[] }>;
   winners?: Array<{ place: number; name: string; photos: string[] }>;
   closestToPin?: { name: string; photos: string[] } | null;
   sideGames?: Array<{ label: string; name: string }>;
@@ -128,6 +129,14 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
 
   get hasFaces(): boolean {
     return !!this.board?.rows.some(row => (row.photos?.length ?? 0) > 0);
+  }
+
+  get field(): Array<{ userId: number; name: string; photos: string[] }> {
+    return this.board?.field ?? [];
+  }
+
+  get fieldFaces(): boolean {
+    return this.field.some(player => player.photos.length > 0);
   }
 
   holeLabel(row: BoardRow): string {

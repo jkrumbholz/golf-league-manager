@@ -64,6 +64,68 @@
         }
       }
 
+      @case ('money') {
+        @if (money) {
+          <p class="section-label">{{ seasonName() }}</p>
+          <div class="card">
+            @for (row of money.season; track row.userId) {
+              <div class="lb-item">
+                <button type="button" class="row" [class.row-static]="row.lines.length === 0" (click)="toggleMoney('season', row)">
+                  @if (moneyFaces) {
+                    <span class="face-slot">
+                      <app-face [urls]="row.profilePictureUrl ? [row.profilePictureUrl] : []"></app-face>
+                    </span>
+                  }
+                  <span class="row-body">
+                    <span class="row-title">{{ row.displayName }}</span>
+                  </span>
+                  <span class="money-total" [class.money-none]="row.total <= 0">{{ moneyLabel(row.total) }}</span>
+                </button>
+                @if (moneyOpen('season', row)) {
+                  <div class="money-lines" [class.money-lines-name]="moneyFaces">
+                    @for (line of row.lines; track $index) {
+                      <div class="money-line">
+                        <span>{{ line.eventName }} · {{ line.label }}</span>
+                        <span>{{ formatMoney(line.amount) }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          <p class="section-label">All time</p>
+          <div class="card">
+            @for (row of money.allTime; track row.userId) {
+              <div class="lb-item">
+                <button type="button" class="row" [class.row-static]="row.lines.length === 0" (click)="toggleMoney('all', row)">
+                  @if (moneyFaces) {
+                    <span class="face-slot">
+                      <app-face [urls]="row.profilePictureUrl ? [row.profilePictureUrl] : []"></app-face>
+                    </span>
+                  }
+                  <span class="row-body">
+                    <span class="row-title">{{ row.displayName }}</span>
+                  </span>
+                  <span class="money-total" [class.money-none]="row.total <= 0">{{ moneyLabel(row.total) }}</span>
+                </button>
+                @if (moneyOpen('all', row)) {
+                  <div class="money-lines" [class.money-lines-name]="moneyFaces">
+                    @for (line of row.lines; track $index) {
+                      <div class="money-line">
+                        <span>{{ line.eventName }} · {{ line.label }}</span>
+                        <span>{{ formatMoney(line.amount) }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+
       @case ('players') {
         <p class="section-label">{{ members.length }} players</p>
         <div class="card">
@@ -90,6 +152,7 @@
   <nav class="tabbar">
     <div class="tabbar-inner">
       <a [routerLink]="['/leagues', leagueId]" [class.active]="tab === 'events'">Events</a>
+      <a [routerLink]="['/leagues', leagueId]" [queryParams]="{ tab: 'money' }" [class.active]="tab === 'money'">Money List</a>
       <a [routerLink]="['/leagues', leagueId]" [queryParams]="{ tab: 'players' }" [class.active]="tab === 'players'">Players</a>
     </div>
   </nav>
