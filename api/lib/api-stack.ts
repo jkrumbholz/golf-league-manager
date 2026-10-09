@@ -37,6 +37,7 @@ export class ApiStack extends cdk.Stack {
     apiUtil.createApi(api, env, 'golfleague-score', 'score.ts', 'score', ['PUT']);
     apiUtil.createApi(api, env, 'golfleague-scorecard', 'scorecard.ts', 'scorecard', ['POST']);
     apiUtil.createApi(api, env, 'golfleague-leaderboard', 'leaderboard.ts', 'leaderboard', ['POST']);
+    apiUtil.createApi(api, env, 'golfleague-money', 'money.ts', 'money', ['POST']);
     apiUtil.createApi(api, env, 'golfleague-dashboard', 'dashboard.ts', 'dashboard', ['POST']);
     apiUtil.createApi(api, env, 'golfleague-payout', 'payout.ts', 'payout', ['PUT', 'DELETE']);
     apiUtil.createApi(api, env, 'golfleague-sidegame', 'sidegame.ts', 'sidegame', ['PUT']);

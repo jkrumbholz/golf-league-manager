@@ -74,7 +74,23 @@
       }
 
       @if (showLeaderboard) {
-      @if (board.rows.length === 0) {
+      @if (field.length > 0) {
+        <p class="section-label">Current Field · {{ field.length }} signed up</p>
+        <div class="card">
+          @for (player of field; track player.userId) {
+            <div class="row row-static">
+              @if (fieldFaces) {
+                <span class="face-slot">
+                  <app-face [urls]="player.photos"></app-face>
+                </span>
+              }
+              <span class="row-body">
+                <span class="row-title">{{ player.name }}</span>
+              </span>
+            </div>
+          }
+        </div>
+      } @else if (board.rows.length === 0) {
         <p class="page-note">No scores yet.</p>
       } @else {
         <div class="card">

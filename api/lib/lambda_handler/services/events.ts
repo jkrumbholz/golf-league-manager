@@ -553,7 +553,8 @@ export async function listSeasons(client: Client, user: AuthUser, leagueId: numb
       SELECT u.id AS "userId", u.username, u.first_name AS "firstName", u.last_name AS "lastName",
              u.display_name AS "displayName", m.role,
              u.handicap_index::float AS "handicapIndex",
-             u.profile_picture_url AS "profilePictureUrl"
+             u.profile_picture_url AS "profilePictureUrl",
+             (u.password_hash IS NOT NULL) AS "hasPassword"
       FROM league_member m
       JOIN app_user u ON u.id = m.user_id
       WHERE m.league_id = $1
@@ -1600,10 +1601,24 @@ export async function getLeaderboard(client: Client, eventId: number, viewerId: 
     scoringEnabled: Boolean(bundle.event.scoringEnabled),
     inField: viewerId != null && bundle.registrations.some(row => Number(row.userId) === viewerId),
     rows,
+    field: anyoneSeated(bundle) ? [] : currentField(bundle),
     winners: placeWinners(bundle),
     closestToPin: pinWinner(bundle),
     sideGames: sideGameWinners(bundle),
   };
+}
+
+/** A tee time with a player or team in it. Empty tee times do not count. */
+function anyoneSeated(bundle: Bundle): boolean {
+  return bundle.groups.some(group => group.members.some(member => member.userId != null || member.teamId != null));
+}
+
+/** Signed-up players, shown until someone is placed in a tee time. */
+function currentField(bundle: Bundle): Array<{ userId: number; name: string; photos: string[] }> {
+  return bundle.registrations.map(row => {
+    const userId = Number(row.userId);
+    return { userId, name: row.displayName, photos: photosFor(bundle, [userId]) };
+  });
 }
 
 function placeWinners(bundle: Bundle): Array<{ place: number; name: string; photos: string[] }> {

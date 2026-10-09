@@ -4,6 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../services/api.service';
 import { CourseNameService } from '../services/course-name.service';
 import { formatHandicapIndex } from '../models/handicap';
+import { money as formatMoney } from '../models/payouts';
 import { FaceComponent } from '../ui/face.component';
 import { ShellComponent } from '../ui/shell.component';
 
@@ -25,7 +26,26 @@ interface LeagueEvent {
   courseConfigurationId: number | null;
 }
 
-type Tab = 'events' | 'players';
+interface MoneyLine {
+  eventName: string;
+  label: string;
+  amount: number;
+}
+
+interface MoneyRow {
+  userId: number;
+  displayName: string;
+  profilePictureUrl: string | null;
+  total: number;
+  lines: MoneyLine[];
+}
+
+interface MoneyList {
+  season: MoneyRow[];
+  allTime: MoneyRow[];
+}
+
+type Tab = 'events' | 'money' | 'players';
 
 @Component({
   selector: 'app-league-home',
@@ -44,7 +64,10 @@ export class LeagueHomeComponent implements OnInit {
   upcoming: LeagueEvent[] = [];
   past: LeagueEvent[] = [];
   members: Array<{ userId: number; displayName: string; role: string; handicapIndex: number; profilePictureUrl?: string | null }> = [];
+  money: MoneyList | null = null;
+  openMoney = '';
   readonly formatIndex = formatHandicapIndex;
+  readonly formatMoney = formatMoney;
   error = '';
 
   constructor(
@@ -57,7 +80,7 @@ export class LeagueHomeComponent implements OnInit {
     this.leagueId = Number(this.route.snapshot.paramMap.get('leagueId'));
     this.route.queryParamMap.subscribe(params => {
       const tab = params.get('tab');
-      this.tab = tab === 'players' ? tab : 'events';
+      this.tab = tab === 'players' || tab === 'money' ? tab : 'events';
     });
 
     try {
@@ -74,7 +97,7 @@ export class LeagueHomeComponent implements OnInit {
       const season = this.seasons.find(item => item.isActive) ?? this.seasons[0];
       if (!season) return;
       this.seasonId = season.id;
-      await this.loadEvents();
+      await Promise.all([this.loadEvents(), this.loadMoney()]);
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Could not load this league';
     }
@@ -84,14 +107,46 @@ export class LeagueHomeComponent implements OnInit {
     return this.members.some(member => !!member.profilePictureUrl);
   }
 
+  get moneyFaces(): boolean {
+    const rows = [...(this.money?.season ?? []), ...(this.money?.allTime ?? [])];
+    return rows.some(row => !!row.profilePictureUrl);
+  }
+
+  seasonName(): string {
+    return this.seasons.find(season => season.id === this.seasonId)?.name || 'This season';
+  }
+
+  moneyLabel(total: number): string {
+    return total > 0 ? this.formatMoney(total) : '—';
+  }
+
+  toggleMoney(scope: 'season' | 'all', row: MoneyRow): void {
+    if (row.lines.length === 0) return;
+    const key = `${scope}:${row.userId}`;
+    this.openMoney = this.openMoney === key ? '' : key;
+  }
+
+  moneyOpen(scope: 'season' | 'all', row: MoneyRow): boolean {
+    return this.openMoney === `${scope}:${row.userId}`;
+  }
+
   async changeSeason(seasonId: number): Promise<void> {
     this.seasonId = Number(seasonId);
     this.error = '';
     try {
-      await this.loadEvents();
+      await Promise.all([this.loadEvents(), this.loadMoney()]);
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Could not load this season';
     }
+  }
+
+  private async loadMoney(): Promise<void> {
+    this.openMoney = '';
+    if (!this.seasonId) {
+      this.money = null;
+      return;
+    }
+    this.money = await this.api.post<MoneyList>('money', { leagueId: this.leagueId, seasonId: this.seasonId });
   }
 
   private async loadEvents(): Promise<void> {
