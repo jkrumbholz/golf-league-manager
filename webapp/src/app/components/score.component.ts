@@ -76,6 +76,7 @@ interface BoardRow {
   lastHole: number | null;
   memberUserIds: number[];
   photos?: string[];
+  faces?: Array<{ name: string; photo: string | null }>;
 }
 
 interface Board {
@@ -183,10 +184,6 @@ export class ScoreComponent implements OnInit {
 
   get tickerRows(): BoardRow[] {
     return this.board?.rows ?? [];
-  }
-
-  get hasFaces(): boolean {
-    return this.tickerRows.some(row => (row.photos?.length ?? 0) > 0);
   }
 
   /** Same pace as the old five-name scroll, with a short wait after the last name. */

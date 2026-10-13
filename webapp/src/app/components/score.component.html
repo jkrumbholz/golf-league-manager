@@ -32,7 +32,7 @@
                 <span class="ticker-set">
                   @for (row of tickerRows; track row.competitorId) {
                     <span class="ticker-item">
-                      <app-face size="sm" [urls]="row.photos"></app-face>
+                      <app-face size="sm" [faces]="row.faces" [urls]="row.photos" [name]="row.name" [ids]="row.memberUserIds"></app-face>
                       <span class="ticker-name">{{ placeLabel(row) }} {{ row.name }}</span>
                       <span class="ticker-score">{{ rowScore(row) }}</span>
                     </span>
@@ -187,11 +187,9 @@
             @for (row of board?.rows ?? []; track row.competitorId) {
               <div class="peek-row" [class.mine]="isMe(row)">
                 <span class="peek-rank">{{ row.rank }}</span>
-                @if (hasFaces) {
-                  <span class="face-slot">
-                    <app-face [urls]="row.photos"></app-face>
-                  </span>
-                }
+                <span class="face-slot">
+                  <app-face [faces]="row.faces" [urls]="row.photos" [name]="row.name" [ids]="row.memberUserIds"></app-face>
+                </span>
                 <span class="peek-name">{{ row.name }}</span>
                 <span class="peek-score">{{ rowScore(row) }}</span>
               </div>

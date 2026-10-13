@@ -13,7 +13,21 @@ export interface Registration {
 export interface Team {
   teamId: number;
   name: string;
+  virtualPartner?: boolean;
   members: Array<{ userId: number; displayName: string }>;
+}
+
+export interface VirtualPartnerPlayer {
+  userId: number;
+  displayName: string;
+  photo: string | null;
+}
+
+export interface VirtualPartner {
+  teamId: number | null;
+  designated: VirtualPartnerPlayer;
+  selected: VirtualPartnerPlayer | null;
+  eligible: VirtualPartnerPlayer[];
 }
 
 export interface TeeGroupMember {
@@ -72,6 +86,7 @@ export interface Dashboard {
   registrations: Registration[];
   leagueMembers: Array<{ userId: number; displayName: string; handicapIndex: number }>;
   teams: Team[];
+  virtualPartner?: VirtualPartner | null;
   groups?: TeeGroup[];
   payouts: Payout[];
   leaderboard?: Array<{

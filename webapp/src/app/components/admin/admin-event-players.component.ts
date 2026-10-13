@@ -75,6 +75,15 @@ export class AdminEventPlayersComponent extends AdminEventScreen implements OnIn
     return !(this.dashboard?.leagueMembers ?? []).some(member => member.userId === player.userId);
   }
 
+  async remove(player: Registration): Promise<void> {
+    if (!window.confirm(`Take ${player.displayName} off this event? Their account stays. Scores posted for them on this event are removed.`)) return;
+    await this.run(() => this.api.put('group', {
+      action: 'dropPlayer',
+      eventId: this.eventId,
+      userId: player.userId,
+    }));
+  }
+
   async addToLeague(player: Registration): Promise<void> {
     const leagueId = this.dashboard?.event.leagueId;
     if (!leagueId) return;

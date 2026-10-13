@@ -71,18 +71,16 @@
             @for (row of money.season; track row.userId) {
               <div class="lb-item">
                 <button type="button" class="row" [class.row-static]="row.lines.length === 0" (click)="toggleMoney('season', row)">
-                  @if (moneyFaces) {
-                    <span class="face-slot">
-                      <app-face [urls]="row.profilePictureUrl ? [row.profilePictureUrl] : []"></app-face>
-                    </span>
-                  }
+                  <span class="face-slot">
+                    <app-face [urls]="row.profilePictureUrl ? [row.profilePictureUrl] : []" [name]="row.displayName"></app-face>
+                  </span>
                   <span class="row-body">
                     <span class="row-title">{{ row.displayName }}</span>
                   </span>
                   <span class="money-total" [class.money-none]="row.total <= 0">{{ moneyLabel(row.total) }}</span>
                 </button>
                 @if (moneyOpen('season', row)) {
-                  <div class="money-lines" [class.money-lines-name]="moneyFaces">
+                  <div class="money-lines money-lines-name">
                     @for (line of row.lines; track $index) {
                       <div class="money-line">
                         <span>{{ line.eventName }} · {{ line.label }}</span>
@@ -100,18 +98,16 @@
             @for (row of money.allTime; track row.userId) {
               <div class="lb-item">
                 <button type="button" class="row" [class.row-static]="row.lines.length === 0" (click)="toggleMoney('all', row)">
-                  @if (moneyFaces) {
-                    <span class="face-slot">
-                      <app-face [urls]="row.profilePictureUrl ? [row.profilePictureUrl] : []"></app-face>
-                    </span>
-                  }
+                  <span class="face-slot">
+                    <app-face [urls]="row.profilePictureUrl ? [row.profilePictureUrl] : []" [name]="row.displayName"></app-face>
+                  </span>
                   <span class="row-body">
                     <span class="row-title">{{ row.displayName }}</span>
                   </span>
                   <span class="money-total" [class.money-none]="row.total <= 0">{{ moneyLabel(row.total) }}</span>
                 </button>
                 @if (moneyOpen('all', row)) {
-                  <div class="money-lines" [class.money-lines-name]="moneyFaces">
+                  <div class="money-lines money-lines-name">
                     @for (line of row.lines; track $index) {
                       <div class="money-line">
                         <span>{{ line.eventName }} · {{ line.label }}</span>
@@ -131,11 +127,9 @@
         <div class="card">
           @for (member of members; track member.userId) {
             <div class="row row-static">
-              @if (hasFaces) {
-                <span class="face-slot">
-                  <app-face [urls]="member.profilePictureUrl ? [member.profilePictureUrl] : []"></app-face>
-                </span>
-              }
+              <span class="face-slot">
+                <app-face [urls]="member.profilePictureUrl ? [member.profilePictureUrl] : []" [name]="member.displayName"></app-face>
+              </span>
               <span class="row-body">
                 <span class="row-title">{{ member.displayName }}</span>
                 <span class="row-meta">{{ member.role }} · {{ formatIndex(member.handicapIndex) }} index</span>

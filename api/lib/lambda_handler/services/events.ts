@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto';
 import { Client } from 'pg';
 import { AuthUser, assertLeagueMember, assertOrganizer, leagueIdForEvent } from '../util/auth';
 import { HttpError } from '../util/http';
@@ -29,6 +30,7 @@ import {
   teamNameFromPlayers,
   usesRunningTee,
 } from '../scoring/scoring';
+import { eligiblePartnerIds, supportsVirtualPartner, virtualPartnerTeamName } from '../scoring/virtual-partner';
 
 interface EventRow {
   id: number;
@@ -108,6 +110,14 @@ interface GroupRow {
   members: GroupMemberRow[];
 }
 
+interface VirtualPartnerDraw {
+  teamId: number;
+  designatedUserId: number;
+  selectedUserId: number | null;
+  drawnAt: string | null;
+  drawnByUserId: number | null;
+}
+
 interface Bundle {
   event: EventRow;
   rounds: RoundRow[];
@@ -116,7 +126,8 @@ interface Bundle {
   registrations: RegistrationRow[];
   /** Profile photo URL by user id. Empty when that player has not uploaded one. */
   photos: Map<number, string>;
-  teams: Array<TeamSetup & { members: PlayerSetup[] }>;
+  teams: Array<TeamSetup & { members: PlayerSetup[]; virtualPartner: boolean }>;
+  virtualPartner: VirtualPartnerDraw | null;
   groups: GroupRow[];
   scores: Array<HoleGross & { roundId: number }>;
   payouts: Array<{
@@ -1035,6 +1046,11 @@ export async function saveTeam(client: Client, user: AuthUser, body: any) {
     return { eventId, updated: teams.rows.length };
   }
 
+  if (action === 'virtualPartner') return designateVirtualPartner(client, bundle, role, user.id, eventId, body);
+  if (action === 'clearVirtualPartner') return clearVirtualPartner(client, role, eventId);
+  if (action === 'drawVirtualPartner') return drawVirtualPartner(client, bundle, role, user.id, eventId, false);
+  if (action === 'redrawVirtualPartner') return drawVirtualPartner(client, bundle, role, user.id, eventId, true, body);
+
   if (action === 'delete') {
     if (role !== 'organizer') throw new HttpError('Only a league organizer can delete a team', 403);
     await client.query(`DELETE FROM team WHERE id = $1 AND event_id = $2`, [Number(body.teamId), eventId]);
@@ -1042,6 +1058,8 @@ export async function saveTeam(client: Client, user: AuthUser, body: any) {
   }
 
   if (action === 'removeMember') {
+    const removing = bundle.teams.find(team => team.teamId === Number(body.teamId));
+    if (removing?.virtualPartner) throw new HttpError('Clear the virtual partner from the teams screen');
     await assertCanEditTeam(bundle, role, user.id, Number(body.teamId));
     await client.query(`DELETE FROM team_member WHERE team_id = $1 AND user_id = $2`, [Number(body.teamId), Number(body.userId)]);
     await refreshTeamName(client, Number(body.teamId));
@@ -1056,6 +1074,9 @@ export async function saveTeam(client: Client, user: AuthUser, body: any) {
   }
 
   let teamId = body.teamId ? Number(body.teamId) : null;
+  if (teamId && bundle.teams.find(team => team.teamId === teamId)?.virtualPartner) {
+    throw new HttpError('The virtual partner is drawn after the round');
+  }
   if (!teamId) {
     if (!bundle.event.playersPickTeams && role !== 'organizer') {
       throw new HttpError('The organizer sets the teams for this event', 403);
@@ -1232,12 +1253,15 @@ async function swapGroupPlayers(client: Client, bundle: Bundle, eventId: number,
   await client.query('BEGIN');
   try {
     if (isTeamFormat(bundle.event.format)) {
+      if (isVirtualPartnerHost(bundle, firstId) || isVirtualPartnerHost(bundle, secondId)) {
+        throw new HttpError('Clear the virtual partner before moving that player');
+      }
       const seats = await client.query(
         `
           SELECT tm.team_id AS "teamId", tm.user_id AS "userId"
           FROM team_member tm
           JOIN team t ON t.id = tm.team_id
-          WHERE t.event_id = $1 AND tm.user_id IN ($2, $3)
+          WHERE t.event_id = $1 AND t.virtual_partner = FALSE AND tm.user_id IN ($2, $3)
         `,
         [eventId, firstId, secondId]
       );
@@ -1247,7 +1271,11 @@ async function swapGroupPlayers(client: Client, bundle: Bundle, eventId: number,
         return { eventId };
       }
       await client.query(
-        `DELETE FROM team_member WHERE user_id IN ($1, $2) AND team_id IN (SELECT id FROM team WHERE event_id = $3)`,
+        `
+          DELETE FROM team_member tm
+          USING team t
+          WHERE tm.team_id = t.id AND t.event_id = $3 AND t.virtual_partner = FALSE AND tm.user_id IN ($1, $2)
+        `,
         [firstId, secondId, eventId]
       );
       for (const seat of seats.rows) {
@@ -1293,17 +1321,25 @@ async function moveGroupPlayer(client: Client, bundle: Bundle, eventId: number, 
   const userId = Number(body.userId);
   if (!bundle.registrations.some(row => row.userId === userId)) throw new HttpError('That player is not signed up', 404);
   if (isTeamFormat(bundle.event.format)) {
+    if (isVirtualPartnerHost(bundle, userId)) {
+      throw new HttpError('Clear the virtual partner before moving that player');
+    }
     const teamId = body.teamId == null || body.teamId === '' ? null : Number(body.teamId);
-    const current = bundle.teams.filter(team => team.members.some(member => member.userId === userId)).map(team => team.teamId);
+    const current = bundle.teams.filter(team => !team.virtualPartner && team.members.some(member => member.userId === userId)).map(team => team.teamId);
     if (teamId != null) {
       const team = bundle.teams.find(item => item.teamId === teamId);
       if (!team) throw new HttpError('Team not found', 404);
+      if (team.virtualPartner) throw new HttpError('The virtual partner is drawn after the round');
       if (team.members.some(member => member.userId === userId)) return { eventId };
       const size = Number(bundle.event.teamSize) || 1;
       if (team.members.length >= size) throw new HttpError('That team is full');
     }
     await client.query(
-      `DELETE FROM team_member WHERE user_id = $1 AND team_id IN (SELECT id FROM team WHERE event_id = $2)`,
+      `
+        DELETE FROM team_member tm
+        USING team t
+        WHERE tm.team_id = t.id AND t.event_id = $2 AND t.virtual_partner = FALSE AND tm.user_id = $1
+      `,
       [userId, eventId]
     );
     if (teamId != null) {
@@ -1409,6 +1445,14 @@ async function dropEventPlayer(client: Client, bundle: Bundle, eventId: number, 
     `,
     [eventId, userId]
   );
+  if (bundle.virtualPartner?.designatedUserId === userId) {
+    await client.query(`DELETE FROM team WHERE id = $1`, [bundle.virtualPartner.teamId]);
+  } else if (bundle.virtualPartner?.selectedUserId === userId) {
+    await client.query(
+      `UPDATE virtual_partner_draw SET selected_user_id = NULL, drawn_at = NULL, drawn_by_user_id = NULL WHERE event_id = $1`,
+      [eventId]
+    );
+  }
   await client.query(
     `
       DELETE FROM score
@@ -1563,6 +1607,7 @@ export async function getLeaderboard(client: Client, eventId: number, viewerId: 
       memberUserIds: row.kind === 'team'
         ? bundle.teams.find(team => team.teamId === row.competitorId)?.members.map(member => member.userId) ?? []
         : [row.competitorId],
+      virtualPartner: bundle.teams.some(team => team.virtualPartner && team.teamId === row.competitorId),
     };
   })).map(({ teeTimeSort: _teeTimeSort, card, ...row }) => {
     const startingHole = row.startingHole ?? null;
@@ -1575,6 +1620,7 @@ export async function getLeaderboard(client: Client, eventId: number, viewerId: 
       lastHole: latestPlayedHole(card ?? [], startingHole) ?? row.lastHole,
       card: played,
       photos: photosFor(bundle, row.memberUserIds),
+      faces: facesFor(bundle, row.memberUserIds),
     };
   });
   const today = new Date().toISOString().slice(0, 10);
@@ -1614,14 +1660,14 @@ function anyoneSeated(bundle: Bundle): boolean {
 }
 
 /** Signed-up players, shown until someone is placed in a tee time. */
-function currentField(bundle: Bundle): Array<{ userId: number; name: string; photos: string[] }> {
+function currentField(bundle: Bundle): Array<{ userId: number; name: string; photos: string[]; faces: FaceSlot[] }> {
   return bundle.registrations.map(row => {
     const userId = Number(row.userId);
-    return { userId, name: row.displayName, photos: photosFor(bundle, [userId]) };
+    return { userId, name: row.displayName, photos: photosFor(bundle, [userId]), faces: facesFor(bundle, [userId]) };
   });
 }
 
-function placeWinners(bundle: Bundle): Array<{ place: number; name: string; photos: string[] }> {
+function placeWinners(bundle: Bundle): Array<{ place: number; name: string; photos: string[]; faces: FaceSlot[] }> {
   return bundle.payouts
     .filter(payout => {
       const place = Number(payout.place);
@@ -1633,20 +1679,20 @@ function placeWinners(bundle: Bundle): Array<{ place: number; name: string; phot
         const team = bundle.teams.find(item => item.teamId === Number(payout.teamId));
         const members = team?.members ?? [];
         const name = members.map(member => member.displayName).filter(part => part.length > 0).join(' / ') || team?.name || 'Team';
-        return { place: Number(payout.place), name, photos: photosFor(bundle, members.map(member => member.userId)) };
+        return { place: Number(payout.place), name, photos: photosFor(bundle, members.map(member => member.userId)), faces: facesFor(bundle, members.map(member => member.userId)) };
       }
       const userId = Number(payout.userId);
       const player = bundle.registrations.find(row => Number(row.userId) === userId);
-      return { place: Number(payout.place), name: player?.displayName || 'Player', photos: photosFor(bundle, [userId]) };
+      return { place: Number(payout.place), name: player?.displayName || 'Player', photos: photosFor(bundle, [userId]), faces: facesFor(bundle, [userId]) };
     });
 }
 
-function pinWinner(bundle: Bundle): { name: string; photos: string[] } | null {
+function pinWinner(bundle: Bundle): { name: string; photos: string[]; faces: FaceSlot[] } | null {
   const userId = bundle.sideGames.closestToPinWinnerUserId;
   if (userId == null) return null;
   const player = bundle.registrations.find(row => Number(row.userId) === Number(userId));
   if (!player) return null;
-  return { name: player.displayName, photos: photosFor(bundle, [Number(userId)]) };
+  return { name: player.displayName, photos: photosFor(bundle, [Number(userId)]), faces: facesFor(bundle, [Number(userId)]) };
 }
 
 function sideGameWinners(bundle: Bundle): Array<{ label: string; name: string }> {
@@ -1661,7 +1707,7 @@ export async function getDashboard(client: Client, user: AuthUser, eventId: numb
   const bundle = await loadBundle(client, eventId);
   const role = await assertLeagueMember(client, bundle.event.leagueId, user.id);
   const mine = bundle.registrations.find(row => row.userId === user.id) ?? null;
-  const myTeam = bundle.teams.find(team => team.members.some(member => member.userId === user.id)) ?? null;
+  const myTeam = primaryTeam(bundle, user.id);
   const leagueMembers = await client.query(
     `
       SELECT u.id AS "userId", u.display_name AS "displayName",
@@ -1694,6 +1740,7 @@ export async function getDashboard(client: Client, user: AuthUser, eventId: numb
     registrations: bundle.registrations,
     leagueMembers: leagueMembers.rows,
     teams: bundle.teams,
+    virtualPartner: publicVirtualPartner(bundle),
     groups: publicGroups(bundle),
     payouts: bundle.payouts,
     sideGames: bundle.sideGames,
@@ -1815,7 +1862,7 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
   );
   if (eventResult.rows.length === 0) throw new HttpError('Event not found', 404);
 
-  const [rounds, teeSets, holes, registrations, teamRows, memberRows, scores, payouts, sideGames, groupRows, groupMemberRows] = await Promise.all([
+  const [rounds, teeSets, holes, registrations, teamRows, memberRows, scores, payouts, sideGames, groupRows, groupMemberRows, drawRows] = await Promise.all([
     client.query(
       `
         SELECT id, round_number AS "roundNumber", play_date::text AS "playDate",
@@ -1864,7 +1911,7 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
       `,
       [eventId]
     ),
-    client.query(`SELECT id AS "teamId", name FROM team WHERE event_id = $1 ORDER BY name, id`, [eventId]),
+    client.query(`SELECT id AS "teamId", name, virtual_partner AS "virtualPartner" FROM team WHERE event_id = $1 ORDER BY name, id`, [eventId]),
     client.query(
       `
         SELECT tm.team_id AS "teamId", tm.user_id AS "userId", u.display_name AS "displayName",
@@ -1924,12 +1971,23 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
       `,
       [eventId]
     ),
+    client.query(
+      `
+        SELECT team_id AS "teamId", designated_user_id AS "designatedUserId",
+               selected_user_id AS "selectedUserId", drawn_at AS "drawnAt",
+               drawn_by_user_id AS "drawnByUserId"
+        FROM virtual_partner_draw
+        WHERE event_id = $1
+      `,
+      [eventId]
+    ),
   ]);
 
   const eventIndex = new Map(registrations.rows.map(row => [Number(row.userId), Number(row.handicapIndex)]));
   const teams = teamRows.rows.map(team => ({
     teamId: Number(team.teamId),
     name: team.name,
+    virtualPartner: Boolean(team.virtualPartner),
     members: memberRows.rows
       .filter(member => Number(member.teamId) === Number(team.teamId))
       .map(member => ({
@@ -1970,6 +2028,15 @@ async function loadBundle(client: Client, eventId: number): Promise<Bundle> {
     registrations: registrations.rows,
     photos: profilePhotos(registrations.rows, memberRows.rows),
     teams,
+    virtualPartner: drawRows.rows[0]
+      ? {
+          teamId: Number(drawRows.rows[0].teamId),
+          designatedUserId: Number(drawRows.rows[0].designatedUserId),
+          selectedUserId: drawRows.rows[0].selectedUserId == null ? null : Number(drawRows.rows[0].selectedUserId),
+          drawnAt: drawRows.rows[0].drawnAt == null ? null : String(drawRows.rows[0].drawnAt),
+          drawnByUserId: drawRows.rows[0].drawnByUserId == null ? null : Number(drawRows.rows[0].drawnByUserId),
+        }
+      : null,
     groups,
     scores: scores.rows,
     payouts: payouts.rows,
@@ -1996,6 +2063,22 @@ function photosFor(bundle: Bundle, userIds: number[]): string[] {
     if (url && !urls.includes(url)) urls.push(url);
   }
   return urls;
+}
+
+interface FaceSlot {
+  name: string;
+  photo: string | null;
+}
+
+function facesFor(bundle: Bundle, userIds: number[]): FaceSlot[] {
+  return userIds.flatMap(id => {
+    const userId = Number(id);
+    const registered = bundle.registrations.find(row => Number(row.userId) === userId);
+    const member = registered ?? bundle.teams.flatMap(team => team.members).find(person => person.userId === userId);
+    const name = member?.displayName || '';
+    if (!name) return [];
+    return [{ name, photo: bundle.photos.get(userId) ?? null }];
+  });
 }
 
 function publicEvent(event: EventRow) {
@@ -2043,7 +2126,10 @@ function ladderFor(bundle: Bundle, roundId: number): LadderTee[] {
 
 function playerSetups(bundle: Bundle): PlayerSetup[] {
   const teamByUser = new Map<number, number>();
-  bundle.teams.forEach(team => team.members.forEach(member => teamByUser.set(member.userId, team.teamId)));
+  const ordered = [...bundle.teams].sort((a, b) => Number(a.virtualPartner) - Number(b.virtualPartner));
+  ordered.forEach(team => team.members.forEach(member => {
+    if (!teamByUser.has(member.userId)) teamByUser.set(member.userId, team.teamId);
+  }));
   return bundle.registrations.map(row => ({
     userId: Number(row.userId),
     displayName: row.displayName,
@@ -2052,9 +2138,20 @@ function playerSetups(bundle: Bundle): PlayerSetup[] {
   }));
 }
 
+function teamsForScoring(bundle: Bundle, includePendingVirtual: boolean): TeamSetup[] {
+  const drawn = bundle.virtualPartner?.selectedUserId != null;
+  return bundle.teams
+    .filter(team => includePendingVirtual || !team.virtualPartner || drawn)
+    .map(team => ({
+      teamId: team.teamId,
+      name: team.name,
+      memberIds: team.members.map(member => member.userId),
+    }));
+}
+
 function leaderboardFor(bundle: Bundle): LeaderboardRow[] {
   const players = playerSetups(bundle);
-  const teams: TeamSetup[] = bundle.teams.map(team => ({ teamId: team.teamId, name: team.name }));
+  const teams = teamsForScoring(bundle, false);
   const rounds: CompetitorTotal[][] = bundle.rounds.map(round => {
     const roundId = Number(round.id);
     return scoreRound(
@@ -2080,7 +2177,7 @@ function scorecardFromBundle(
   role: string
 ) {
   const players = playerSetups(bundle);
-  const teams: TeamSetup[] = bundle.teams.map(team => ({ teamId: team.teamId, name: team.name }));
+  const teams = teamsForScoring(bundle, true);
   const scored = scoreRound(
     bundle.event.format,
     holesFor(bundle, roundId),
@@ -2125,7 +2222,7 @@ function scorecardFromBundle(
   if (!bundle.event.scoringEnabled) return { ...base, notice: 'Scoring is closed for this event.' };
 
   if (bundle.groups.length === 0) {
-    const viewerTeam = bundle.teams.find(team => team.members.some(member => member.userId === viewerId));
+    const viewerTeam = primaryTeam(bundle, viewerId);
     const competitorId = requestedTeamId ?? (isTeamFormat(bundle.event.format) ? viewerTeam?.teamId ?? null : viewerId);
     const competitor = isTeamFormat(bundle.event.format)
       ? scored.find(row => row.id === competitorId) ?? scored[0] ?? null
@@ -2327,11 +2424,10 @@ function publicGroups(bundle: Bundle) {
 }
 
 function groupForViewer(bundle: Bundle, viewerId: number): GroupRow | null {
+  const primaryId = primaryTeam(bundle, viewerId)?.teamId ?? null;
   return bundle.groups.find(group => group.members.some(member => {
     if (member.userId === viewerId) return true;
-    if (member.teamId == null) return false;
-    const team = bundle.teams.find(item => item.teamId === member.teamId);
-    return !!team?.members.some(person => person.userId === viewerId);
+    return primaryId != null && member.teamId === primaryId;
   })) ?? null;
 }
 
@@ -2393,6 +2489,222 @@ function mergeGrosses(existing: HoleGross[], incoming: HoleGross[]): HoleGross[]
   return [...map.values()];
 }
 
+function isVirtualPartnerHost(bundle: Bundle, userId: number): boolean {
+  return bundle.virtualPartner?.designatedUserId === userId;
+}
+
+function primaryTeam(bundle: Bundle, userId: number) {
+  const teams = bundle.teams.filter(team => team.members.some(member => member.userId === userId));
+  return teams.find(team => !team.virtualPartner) ?? teams[0] ?? null;
+}
+
+function partnerPlayer(bundle: Bundle, userId: number) {
+  const row = bundle.registrations.find(player => Number(player.userId) === userId);
+  if (!row) return null;
+  return {
+    userId,
+    displayName: row.displayName,
+    photo: bundle.photos.get(userId) ?? null,
+  };
+}
+
+function publicVirtualPartner(bundle: Bundle) {
+  const draw = bundle.virtualPartner;
+  const team = bundle.teams.find(item => item.virtualPartner);
+  const designatedUserId = draw?.designatedUserId ?? team?.members[0]?.userId ?? null;
+  if (designatedUserId == null) return null;
+  const designated = partnerPlayer(bundle, designatedUserId);
+  if (!designated) return null;
+  const selectedUserId = draw?.selectedUserId ?? null;
+  return {
+    teamId: draw?.teamId ?? team?.teamId ?? null,
+    designated,
+    selected: selectedUserId == null ? null : partnerPlayer(bundle, selectedUserId),
+    eligible: eligiblePartnerIds(bundle.registrations.map(player => Number(player.userId)), designatedUserId)
+      .map(userId => partnerPlayer(bundle, userId))
+      .filter((player): player is NonNullable<typeof player> => player != null),
+  };
+}
+
+async function designateVirtualPartner(client: Client, bundle: Bundle, role: string, organizerId: number, eventId: number, body: any) {
+  if (role !== 'organizer') throw new HttpError('Only a league organizer can set a virtual partner', 403);
+  if (!supportsVirtualPartner(bundle.event.format)) throw new HttpError('This format does not use a virtual partner');
+  const userId = Number(body.userId);
+  await assertRegistered(bundle, userId);
+  if (bundle.virtualPartner && bundle.virtualPartner.designatedUserId !== userId) {
+    throw new HttpError('This event already has a virtual partner');
+  }
+  if (bundle.virtualPartner?.designatedUserId === userId) return { eventId, teamId: bundle.virtualPartner.teamId };
+
+  const memberships = bundle.teams.filter(team => team.members.some(member => member.userId === userId));
+  if (memberships.some(team => team.members.some(member => member.userId !== userId))) {
+    throw new HttpError('Take that player off their team before giving them a virtual partner');
+  }
+
+  await client.query('BEGIN');
+  try {
+    let teamId = memberships[0]?.teamId ?? null;
+    if (teamId == null) {
+      const inserted = await client.query(
+        `INSERT INTO team (event_id, name, created_by_user_id, virtual_partner) VALUES ($1, 'Virtual Partner', $2, TRUE) RETURNING id`,
+        [eventId, organizerId]
+      );
+      teamId = Number(inserted.rows[0].id);
+      await client.query(
+        `INSERT INTO team_member (team_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [teamId, userId]
+      );
+    } else {
+      await client.query(
+        `UPDATE team SET virtual_partner = TRUE WHERE id = $1 AND event_id = $2`,
+        [teamId, eventId]
+      );
+    }
+    await client.query(
+      `
+        INSERT INTO virtual_partner_draw (event_id, team_id, designated_user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (event_id) DO NOTHING
+      `,
+      [eventId, teamId, userId]
+    );
+    await refreshTeamName(client, teamId);
+    await client.query('COMMIT');
+    return { eventId, teamId };
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    if (error?.code === '23505') throw new HttpError('This event already has a virtual partner');
+    throw error;
+  }
+}
+
+async function clearVirtualPartner(client: Client, role: string, eventId: number) {
+  if (role !== 'organizer') throw new HttpError('Only a league organizer can clear a virtual partner', 403);
+  const team = await client.query(
+    `SELECT id FROM team WHERE event_id = $1 AND virtual_partner = TRUE`,
+    [eventId]
+  );
+  if (team.rows.length === 0) return { eventId };
+  const teamId = Number(team.rows[0].id);
+  const draw = await client.query(
+    `SELECT designated_user_id AS "designatedUserId", selected_user_id AS "selectedUserId" FROM virtual_partner_draw WHERE team_id = $1`,
+    [teamId]
+  );
+  const designatedUserId = draw.rows[0]?.designatedUserId == null ? null : Number(draw.rows[0].designatedUserId);
+  const selectedUserId = draw.rows[0]?.selectedUserId == null ? null : Number(draw.rows[0].selectedUserId);
+  await client.query('BEGIN');
+  try {
+    if (selectedUserId != null && selectedUserId !== designatedUserId) {
+      await client.query(`DELETE FROM team_member WHERE team_id = $1 AND user_id = $2`, [teamId, selectedUserId]);
+    }
+    await client.query(`DELETE FROM virtual_partner_draw WHERE team_id = $1`, [teamId]);
+    await client.query(`UPDATE team SET virtual_partner = FALSE WHERE id = $1`, [teamId]);
+    await refreshTeamName(client, teamId);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+  return { eventId, teamId };
+}
+
+async function drawVirtualPartner(
+  client: Client,
+  bundle: Bundle,
+  role: string,
+  organizerId: number,
+  eventId: number,
+  redraw: boolean,
+  body: any = {}
+) {
+  if (role !== 'organizer') throw new HttpError('Only a league organizer can draw a virtual partner', 403);
+  if (!supportsVirtualPartner(bundle.event.format)) throw new HttpError('This format does not use a virtual partner');
+  const team = bundle.teams.find(item => item.virtualPartner);
+  const designatedUserId = bundle.virtualPartner?.designatedUserId ?? team?.members[0]?.userId ?? null;
+  if (!team || designatedUserId == null) throw new HttpError('Choose the player who needs a virtual partner first');
+  if (redraw && body.confirm !== true) throw new HttpError('Confirm the redraw before replacing the partner');
+
+  const eligible = eligiblePartnerIds(bundle.registrations.map(player => Number(player.userId)), designatedUserId);
+  if (eligible.length === 0) throw new HttpError('Sign up at least one other player before drawing a partner');
+
+  await client.query('BEGIN');
+  try {
+    await client.query(
+      `
+        INSERT INTO virtual_partner_draw (event_id, team_id, designated_user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (event_id) DO NOTHING
+      `,
+      [eventId, team.teamId, designatedUserId]
+    );
+    const locked = await client.query(
+      `
+        SELECT selected_user_id AS "selectedUserId"
+        FROM virtual_partner_draw
+        WHERE event_id = $1
+        FOR UPDATE
+      `,
+      [eventId]
+    );
+    const current = locked.rows[0]?.selectedUserId == null ? null : Number(locked.rows[0].selectedUserId);
+    if (!redraw && current != null) {
+      await client.query('COMMIT');
+      return virtualPartnerResult(bundle, designatedUserId, current, true);
+    }
+    if (redraw && current == null) throw new HttpError('Draw a partner before redrawing');
+
+    const selectedUserId = eligible[randomInt(eligible.length)];
+    if (redraw) {
+      await client.query(
+        `
+          INSERT INTO virtual_partner_redraw (event_id, previous_user_id, selected_user_id, organizer_user_id)
+          VALUES ($1, $2, $3, $4)
+        `,
+        [eventId, current, selectedUserId, organizerId]
+      );
+      if (current != null && current !== selectedUserId) {
+        await client.query(
+          `DELETE FROM team_member WHERE team_id = $1 AND user_id = $2`,
+          [team.teamId, current]
+        );
+      }
+    }
+    await client.query(
+      `
+        UPDATE virtual_partner_draw
+        SET selected_user_id = $2, drawn_at = NOW(), drawn_by_user_id = $3
+        WHERE event_id = $1
+      `,
+      [eventId, selectedUserId, organizerId]
+    );
+    await client.query(
+      `INSERT INTO team_member (team_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [team.teamId, selectedUserId]
+    );
+    await refreshTeamName(client, team.teamId);
+    await client.query('COMMIT');
+    return virtualPartnerResult(bundle, designatedUserId, selectedUserId, false);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+}
+
+function virtualPartnerResult(bundle: Bundle, designatedUserId: number, selectedUserId: number, replay: boolean) {
+  const designated = partnerPlayer(bundle, designatedUserId);
+  const selected = partnerPlayer(bundle, selectedUserId);
+  if (!designated || !selected) throw new HttpError('That player is not signed up');
+  return {
+    replay,
+    teamId: bundle.virtualPartner?.teamId ?? bundle.teams.find(team => team.virtualPartner)?.teamId ?? null,
+    designated,
+    selected,
+    eligible: eligiblePartnerIds(bundle.registrations.map(player => Number(player.userId)), designatedUserId)
+      .map(userId => partnerPlayer(bundle, userId))
+      .filter((player): player is NonNullable<typeof player> => player != null),
+  };
+}
+
 async function assertRegistered(bundle: Bundle, userId: number) {
   if (!bundle.registrations.some(row => Number(row.userId) === userId)) {
     throw new HttpError('That player is not signed up');
@@ -2412,6 +2724,10 @@ async function assertCanEditTeam(bundle: Bundle, role: string, userId: number, t
 }
 
 async function refreshTeamName(client: Client, teamId: number) {
+  const team = await client.query(
+    `SELECT virtual_partner AS "virtualPartner" FROM team WHERE id = $1`,
+    [teamId]
+  );
   const members = await client.query(
     `
       SELECT u.display_name AS "displayName"
@@ -2422,6 +2738,14 @@ async function refreshTeamName(client: Client, teamId: number) {
     `,
     [teamId]
   );
-  const name = teamNameFromPlayers(members.rows.map(row => row.displayName)) || 'Team';
+  const names = members.rows.map(row => row.displayName);
+  let name = teamNameFromPlayers(names) || 'Team';
+  if (team.rows[0]?.virtualPartner) {
+    const draw = await client.query(
+      `SELECT selected_user_id FROM virtual_partner_draw WHERE team_id = $1`,
+      [teamId]
+    );
+    name = virtualPartnerTeamName(names, draw.rows[0]?.selected_user_id != null);
+  }
   await client.query(`UPDATE team SET name = $2 WHERE id = $1`, [teamId, name]);
 }

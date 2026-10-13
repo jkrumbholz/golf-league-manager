@@ -20,6 +20,10 @@ export const FORMATS: FormatOption[] = [
   { id: 'low_high_total', label: 'Low / High / Combo', team: true, teamSize: 2, teamGross: false, runningTee: false },
 ];
 
+export function supportsVirtualPartner(id: string): boolean {
+  return id === 'best_ball' || id === 'high_ball' || id === 'low_high_total';
+}
+
 export function formatOption(id: string): FormatOption {
   return FORMATS.find(format => format.id === id) ?? FORMATS[0];
 }
