@@ -4,20 +4,39 @@
 
     @if (dashboard) {
       <p class="section-label">Teams of {{ teamSize }}</p>
+      @if (virtualPartnerFormat && !virtualPartnerTeam) {
+        <p class="page-note">One player can take a virtual partner. Their teammate is drawn after the round.</p>
+      }
 
-      @if (dashboard.teams.length === 0) {
-        <p class="page-note">No teams yet. Pick a player below to start the first one.</p>
-      } @else {
+      @if (dashboard.teams.length === 0 && !drawOpen) {
+        <p class="page-note">No teams yet. Draw them at random, or pick a player below to start the first one.</p>
+      } @else if (dashboard.teams.length > 0) {
         <div class="card">
           @for (team of dashboard.teams; track team.teamId) {
             <div class="row row-static">
               <span class="row-body">
                 <span class="row-title">{{ team.name }}</span>
-                <span class="row-meta">{{ team.members.length }} of {{ teamSize }}</span>
+                <span class="row-meta">
+                  {{ team.members.length }} of {{ teamSize }}
+                  @if (team.virtualPartner) { · Virtual partner }
+                </span>
                 <span class="inline-actions">
                   @for (member of team.members; track member.userId) {
-                    <button class="btn-secondary" type="button" [disabled]="busy" (click)="removeFromTeam(team.teamId, member.userId)">
-                      {{ member.displayName }} &#10005;
+                    @if (team.virtualPartner && member.userId === dashboard.virtualPartner?.selected?.userId) {
+                      <button class="btn-secondary" type="button" [disabled]="busy" (click)="clearVirtualPartner()">
+                        {{ member.displayName }} &#10005;
+                      </button>
+                    } @else if (team.virtualPartner) {
+                      <span class="btn-secondary chip-on">{{ member.displayName }}</span>
+                    } @else {
+                      <button class="btn-secondary" type="button" [disabled]="busy" (click)="removeFromTeam(team.teamId, member.userId)">
+                        {{ member.displayName }} &#10005;
+                      </button>
+                    }
+                  }
+                  @if (team.virtualPartner && !dashboard.virtualPartner?.selected) {
+                    <button class="btn-secondary" type="button" [disabled]="busy" (click)="clearVirtualPartner()">
+                      Virtual Partner &#10005;
                     </button>
                   }
                 </span>
@@ -27,14 +46,93 @@
                   {{ targetTeamId === team.teamId ? 'Picking' : 'Add to' }}
                 </button>
               }
-              <button class="btn-quiet btn-danger" type="button" [disabled]="busy" (click)="removeTeam(team.teamId)">Delete</button>
+              @if (virtualPartnerFormat && !virtualPartnerTeam && !team.virtualPartner && team.members.length === 1) {
+                <button class="btn-secondary" type="button" [disabled]="busy" (click)="makeVirtualPartner(team.members[0].userId)">Virtual partner</button>
+              }
+              @if (team.virtualPartner) {
+                <button class="btn-quiet btn-danger" type="button" [disabled]="busy" (click)="clearVirtualPartner()">Remove partner</button>
+              } @else {
+                <button class="btn-quiet btn-danger" type="button" [disabled]="busy" (click)="removeTeam(team.teamId)">Delete</button>
+              }
             </div>
           }
         </div>
         <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="refreshNames()">Refresh names</button>
+        @if (virtualPartnerTeam) {
+          <a class="btn-primary" [routerLink]="['/admin/events', eventId, 'partner']">
+            {{ dashboard.virtualPartner?.selected ? 'See virtual partner' : 'Draw virtual partner' }}
+          </a>
+        }
       }
 
-      @if (unassigned.length > 0) {
+      @if (drawOpen) {
+        <p class="section-label" aria-live="polite">{{ drawStatus }}</p>
+        <div class="draw-stage" [class.draw-stage-ready]="phase === 'ready'">
+          @if (phase !== 'ready' && phase !== 'saving') {
+            <div class="draw-spotlight" [class.draw-spotlight-locked]="spotlightLocked" aria-hidden="true">
+              <p class="draw-spotlight-name" [class.locked]="spotlightLocked">
+                {{ spotlight ? spotlight.displayName : 'Drawing…' }}
+              </p>
+            </div>
+
+            @if (phase === 'dealing' && (held.length > 0 || spotlight)) {
+              <div class="draw-held" aria-hidden="true">
+                @for (player of held; track player.userId) {
+                  <span class="draw-chip draw-chip-locked">{{ player.displayName }}</span>
+                }
+                @for (slot of openSlots; track slot) {
+                  <span class="draw-chip draw-chip-ghost">?</span>
+                }
+              </div>
+            }
+
+            @if (pool.length > 0) {
+              <div class="draw-pool">
+                @for (player of pool; track player.userId; let i = $index) {
+                  <span
+                    class="draw-chip"
+                    [class.draw-chip-hot]="spotlight?.userId === player.userId"
+                    [style.animation-delay.ms]="i * 45"
+                  >{{ player.displayName }}</span>
+                }
+              </div>
+            }
+          }
+
+          @for (team of revealed; track team[0].userId; let i = $index) {
+            <div class="card draw-card">
+              <div class="row row-static">
+                <span class="row-body">
+                  <span class="row-meta">Team {{ i + 1 }}</span>
+                  @for (player of team; track player.userId) {
+                    <span class="draw-member">{{ player.displayName }}</span>
+                  }
+                </span>
+              </div>
+            </div>
+          }
+
+          @if ((phase === 'ready' || phase === 'saving') && leftover.length > 0) {
+            <p class="page-note">Not enough players for another full team: {{ leftoverNames }}.</p>
+          }
+
+          @if (phase === 'ready' || phase === 'saving') {
+            <div class="draw-actions">
+              <button class="btn-primary" type="button" [disabled]="busy" (click)="createDrawnTeams()">
+                {{ phase === 'saving' ? 'Creating teams…' : 'Create these teams' }}
+              </button>
+              <button class="btn-secondary" type="button" [disabled]="busy" (click)="tryAgain()">Try again</button>
+              <button class="btn-quiet" type="button" [disabled]="busy" (click)="closeDraw()">Cancel</button>
+            </div>
+          } @else {
+            <button class="btn-quiet draw-cancel" type="button" (click)="closeDraw()">Cancel</button>
+          }
+        </div>
+      } @else if (unassigned.length > 0) {
+        @if (unassigned.length >= teamSize) {
+          <button class="btn-primary" type="button" [disabled]="busy" (click)="startDraw()">Random draw</button>
+        }
+
         <p class="section-label">
           @if (targetTeamId === null) {
             Tap a player to start a new team
@@ -45,10 +143,14 @@
 
         <div class="card">
           @for (player of unassigned; track player.userId) {
-            <button class="row" type="button" [disabled]="busy" (click)="place(player.userId)">
-              <span class="row-body"><span class="row-title">{{ player.displayName }}</span></span>
-              <span class="chevron">&#8250;</span>
-            </button>
+            <div class="row row-static">
+              <button class="row-body" type="button" [disabled]="busy" (click)="place(player.userId)">
+                <span class="row-title">{{ player.displayName }}</span>
+              </button>
+              @if (virtualPartnerFormat && !virtualPartnerTeam) {
+                <button class="btn-secondary" type="button" [disabled]="busy" (click)="makeVirtualPartner(player.userId)">Virtual partner</button>
+              }
+            </div>
           }
         </div>
 

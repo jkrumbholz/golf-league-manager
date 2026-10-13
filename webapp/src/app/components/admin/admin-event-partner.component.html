@@ -1,0 +1,60 @@
+<div class="screen">
+  <div class="screen-inner vp-wide">
+    <app-shell nav="back" action="none" title="Virtual partner" [backTo]="backTo"></app-shell>
+
+    @if (dashboard) {
+      @if (!partner) {
+        <p class="page-note">Pick the player who needs a partner on the teams screen. Their teammate is drawn from the rest of the field after the round.</p>
+        <a class="btn-primary" [routerLink]="['/admin/events', eventId, 'teams']">Go to teams</a>
+      } @else if (view) {
+        <p class="section-label section-label-center" aria-live="polite">{{ status }}</p>
+
+        <div class="vp-stage" [class.vp-stage-final]="phase === 'celebration'">
+          @if (phase === 'celebration' && view.selected) {
+            <div class="vp-confetti" aria-hidden="true">
+              @for (piece of confetti; track $index) {
+                <span [style.left.%]="piece.left" [style.animation-delay.ms]="piece.delay" [style.background]="piece.color"></span>
+              }
+            </div>
+            <p class="vp-kicker">Who's your partner?</p>
+            <div class="vp-pair">
+              <div class="vp-person">
+                <span class="vp-face"><app-face [urls]="[view.designated.photo]" [name]="view.designated.displayName"></app-face></span>
+                <p class="vp-name">{{ view.designated.displayName }}</p>
+              </div>
+              <p class="vp-and">&amp;</p>
+              <div class="vp-person">
+                <span class="vp-face"><app-face [urls]="[view.selected.photo]" [name]="view.selected.displayName"></app-face></span>
+                <p class="vp-name vp-name-picked">{{ view.selected.displayName }}</p>
+              </div>
+            </div>
+            <div class="draw-actions">
+              <a class="btn-primary" [routerLink]="['/events', eventId]">See standings</a>
+              <button class="btn-secondary" type="button" [disabled]="busy" (click)="draw()">Watch again</button>
+              <button class="btn-quiet" type="button" [disabled]="busy" (click)="redraw()">Redraw partner</button>
+            </div>
+          } @else {
+            <div class="vp-intro">
+              <p class="vp-kicker">Who's your partner?</p>
+              <span class="vp-face"><app-face [urls]="[view.designated.photo]" [name]="view.designated.displayName"></app-face></span>
+              <p class="vp-host">{{ view.designated.displayName }}</p>
+              <div class="vp-spotlight" [class.vp-spotlight-locked]="phase === 'reveal' && shown">
+                <p class="vp-spotlight-name" [class.locked]="phase === 'reveal' && shown">
+                  {{ shown?.displayName || (phase === 'reveal' ? '…' : 'The hat is ready') }}
+                </p>
+              </div>
+              @if (phase === 'intro') {
+                <p class="page-note">{{ view.eligible.length }} names go in the hat. The draw is saved before the reveal.</p>
+                <button class="btn-primary" type="button" [disabled]="busy || view.eligible.length === 0" (click)="draw()">
+                  Draw virtual partner
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
+    }
+
+    @if (error) { <p class="error">{{ error }}</p> }
+  </div>
+</div>

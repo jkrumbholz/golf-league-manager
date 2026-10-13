@@ -24,6 +24,7 @@ import { AdminEventCourseComponent } from './components/admin/admin-event-course
 import { AdminEventPlayersComponent } from './components/admin/admin-event-players.component';
 import { AdminEventPlayersAddComponent } from './components/admin/admin-event-players-add.component';
 import { AdminEventTeamsComponent } from './components/admin/admin-event-teams.component';
+import { AdminEventPartnerComponent } from './components/admin/admin-event-partner.component';
 import { AdminEventGroupsComponent } from './components/admin/admin-event-groups.component';
 import { AdminEventGroupFormComponent } from './components/admin/admin-event-group-form.component';
 import { AdminEventSideGamesComponent } from './components/admin/admin-event-side-games.component';
@@ -66,6 +67,7 @@ export const routes: Routes = [
           { path: 'events/:eventId/players', component: AdminEventPlayersComponent },
           { path: 'events/:eventId/players/add', component: AdminEventPlayersAddComponent },
           { path: 'events/:eventId/teams', component: AdminEventTeamsComponent },
+          { path: 'events/:eventId/partner', component: AdminEventPartnerComponent },
           { path: 'events/:eventId/groups/new', component: AdminEventGroupFormComponent },
           { path: 'events/:eventId/groups', component: AdminEventGroupsComponent },
           { path: 'events/:eventId/side-games', component: AdminEventSideGamesComponent },

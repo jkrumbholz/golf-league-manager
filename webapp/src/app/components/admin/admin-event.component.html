@@ -32,6 +32,16 @@
           </a>
         }
 
+        @if (virtualPartnerFormat) {
+          <a class="row" [routerLink]="['/admin/events', eventId, 'partner']">
+            <span class="row-body">
+              <span class="row-title">Virtual partner</span>
+              <span class="row-meta">{{ partnerSummary() }}</span>
+            </span>
+            <span class="chevron">&#8250;</span>
+          </a>
+        }
+
         <a class="row" [routerLink]="['/admin/events', eventId, 'groups']">
           <span class="row-body">
             <span class="row-title">Tee sheet</span>

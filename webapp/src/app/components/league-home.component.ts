@@ -103,15 +103,6 @@ export class LeagueHomeComponent implements OnInit {
     }
   }
 
-  get hasFaces(): boolean {
-    return this.members.some(member => !!member.profilePictureUrl);
-  }
-
-  get moneyFaces(): boolean {
-    const rows = [...(this.money?.season ?? []), ...(this.money?.allTime ?? [])];
-    return rows.some(row => !!row.profilePictureUrl);
-  }
-
   seasonName(): string {
     return this.seasons.find(season => season.id === this.seasonId)?.name || 'This season';
   }

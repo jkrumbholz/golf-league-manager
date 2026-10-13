@@ -5,11 +5,12 @@ import { AuthService, SessionUser } from '../services/auth.service';
 import { ImageService } from '../services/image.service';
 import { formatHandicapIndex, parseHandicapIndex } from '../models/handicap';
 import { ShellComponent } from '../ui/shell.component';
+import { FaceComponent } from '../ui/face.component';
 
 @Component({
   selector: 'app-account',
   standalone: true,
-  imports: [FormsModule, ShellComponent],
+  imports: [FormsModule, ShellComponent, FaceComponent],
   templateUrl: './account.component.html',
 })
 export class AccountComponent implements OnInit {
@@ -21,7 +22,6 @@ export class AccountComponent implements OnInit {
   error = '';
   saved = false;
   uploading = false;
-  pictureVisible = true;
 
   constructor(private api: ApiService, private auth: AuthService, private images: ImageService) {}
 
@@ -69,7 +69,6 @@ export class AccountComponent implements OnInit {
     this.saved = false;
     this.uploading = true;
     try {
-      this.pictureVisible = true;
       this.profilePictureUrl = await this.images.uploadProfile(file);
       await this.save();
     } catch (error: unknown) {

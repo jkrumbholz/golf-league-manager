@@ -47,6 +47,11 @@ interface Tiebreaker {
   order: Array<{ competitorId: number; name: string; rank: number }>;
 }
 
+interface FaceSlot {
+  name: string;
+  photo: string | null;
+}
+
 interface BoardRow {
   competitorId: number;
   rank: number;
@@ -61,7 +66,9 @@ interface BoardRow {
   startingHole?: number | null;
   currentTeeName: string | null;
   memberUserIds: number[];
+  virtualPartner?: boolean;
   photos?: string[];
+  faces?: FaceSlot[];
   keeps?: KeepProgress[] | null;
   card?: PlayedHole[];
   tiebreaker?: Tiebreaker | null;
@@ -83,9 +90,9 @@ interface Board {
   scoringEnabled?: boolean;
   inField?: boolean;
   rows: BoardRow[];
-  field?: Array<{ userId: number; name: string; photos: string[] }>;
-  winners?: Array<{ place: number; name: string; photos: string[] }>;
-  closestToPin?: { name: string; photos: string[] } | null;
+  field?: Array<{ userId: number; name: string; photos: string[]; faces?: FaceSlot[] }>;
+  winners?: Array<{ place: number; name: string; photos: string[]; faces?: FaceSlot[] }>;
+  closestToPin?: { name: string; photos: string[]; faces?: FaceSlot[] } | null;
   sideGames?: Array<{ label: string; name: string }>;
 }
 
@@ -127,16 +134,12 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     this.stopRefreshing();
   }
 
-  get hasFaces(): boolean {
-    return !!this.board?.rows.some(row => (row.photos?.length ?? 0) > 0);
-  }
-
-  get field(): Array<{ userId: number; name: string; photos: string[] }> {
+  get field(): Array<{ userId: number; name: string; photos: string[]; faces?: FaceSlot[] }> {
     return this.board?.field ?? [];
   }
 
-  get fieldFaces(): boolean {
-    return this.field.some(player => player.photos.length > 0);
+  memberIds(name: string): number[] {
+    return this.board?.rows.find(row => row.name === name)?.memberUserIds ?? [];
   }
 
   holeLabel(row: BoardRow): string {
@@ -317,16 +320,12 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     return !this.placesDecided || this.tab === 'leaderboard';
   }
 
-  get winners(): Array<{ place: number; name: string; photos: string[] }> {
+  get winners(): Array<{ place: number; name: string; photos: string[]; faces?: FaceSlot[] }> {
     return this.board?.winners ?? [];
   }
 
-  get pinWinner(): { name: string; photos: string[] } | null {
+  get pinWinner(): { name: string; photos: string[]; faces?: FaceSlot[] } | null {
     return this.board?.closestToPin ?? null;
-  }
-
-  get showWinnerFaces(): boolean {
-    return this.winners.some(winner => winner.photos.length > 0) || (this.pinWinner?.photos.length ?? 0) > 0;
   }
 
   get sideGames(): Array<{ label: string; name: string }> {

@@ -3,12 +3,13 @@ import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { Subscription, filter } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { MembershipService } from '../services/membership.service';
+import { FaceComponent } from './face.component';
 import { NavService } from './nav.service';
 
 @Component({
   selector: 'app-drawer',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, FaceComponent],
   templateUrl: './drawer.component.html',
 })
 export class DrawerComponent implements OnDestroy {
@@ -39,10 +40,6 @@ export class DrawerComponent implements OnDestroy {
 
   close(): void {
     this.navService.close();
-  }
-
-  hideImage(event: Event): void {
-    (event.target as HTMLImageElement).style.display = 'none';
   }
 
   async logout(): Promise<void> {

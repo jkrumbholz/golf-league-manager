@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { CourseNameService } from '../../services/course-name.service';
 import { Dashboard } from '../../models/dashboard';
-import { formatOption } from '../../models/formats';
+import { formatOption, supportsVirtualPartner } from '../../models/formats';
 import { ShellComponent } from '../../ui/shell.component';
 
 @Component({
@@ -46,6 +46,17 @@ export class AdminEventComponent implements OnInit {
 
   get sideGames(): boolean {
     return !!this.dashboard && (this.dashboard.event.ctpEnabled || this.dashboard.event.longDriveEnabled);
+  }
+
+  get virtualPartnerFormat(): boolean {
+    return supportsVirtualPartner(this.dashboard?.event.format || '');
+  }
+
+  partnerSummary(): string {
+    const partner = this.dashboard?.virtualPartner;
+    if (!partner) return 'Not set';
+    if (partner.selected) return `${partner.designated.displayName} with ${partner.selected.displayName}`;
+    return `${partner.designated.displayName} is waiting on a draw`;
   }
 
   meta(): string {

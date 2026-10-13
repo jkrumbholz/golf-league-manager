@@ -79,10 +79,6 @@ export class AdminLeagueComponent implements OnInit {
     return this.courseNames.dateRange(season.startDate, season.endDate);
   }
 
-  get hasFaces(): boolean {
-    return this.members.some(member => !!member.profilePictureUrl);
-  }
-
   memberRole(member: Member): string {
     return member.role === 'organizer' ? 'Organizer' : 'Player';
   }

@@ -71,6 +71,12 @@ export interface PlayerSetup {
 export interface TeamSetup {
   teamId: number;
   name: string;
+  /**
+   * Players scored on this team. When set, those players can also belong to
+   * another team. The virtual partner team uses this so the drawn teammate
+   * keeps their original team.
+   */
+  memberIds?: number[];
 }
 
 export interface HoleGross {
@@ -366,7 +372,7 @@ export function scoreRound(
 ): CompetitorTotal[] {
   const orderedHoles = [...holes].sort((a, b) => a.sequence - b.sequence);
   if (isTeamFormat(format)) {
-    return teams.map(team => scoreTeam(format, orderedHoles, ladder, players.filter(player => player.teamId === team.teamId), team, grosses, allowance));
+    return teams.map(team => scoreTeam(format, orderedHoles, ladder, membersOf(team, players), team, grosses, allowance));
   }
   return players.map(player => scorePlayer(format, orderedHoles, ladder, player, grosses, allowance));
 }
@@ -462,6 +468,17 @@ export function orderLeaderboard<T extends LeaderboardRow & { teeTimeSort?: stri
 
   attachTiebreakers(ordered);
   return ordered;
+}
+
+function membersOf(team: TeamSetup, players: PlayerSetup[]): PlayerSetup[] {
+  if (!team.memberIds) return players.filter(player => player.teamId === team.teamId);
+  const byId = new Map(players.map(player => [player.userId, player]));
+  const members: PlayerSetup[] = [];
+  for (const id of team.memberIds) {
+    const player = byId.get(id);
+    if (player) members.push({ ...player, teamId: team.teamId });
+  }
+  return members;
 }
 
 function scorePlayer(

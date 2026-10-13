@@ -4,9 +4,7 @@
 
     <form class="form" (ngSubmit)="save()">
       <div class="photo-row">
-        @if (profilePictureUrl && pictureVisible) {
-          <img class="avatar" [src]="profilePictureUrl" alt="" (error)="pictureVisible = false" />
-        }
+        <app-face class="account-face" [urls]="[profilePictureUrl]" [name]="displayName"></app-face>
         <label class="btn-secondary file-button">
           {{ uploading ? 'Uploading' : 'Choose photo' }}
           <input type="file" accept="image/jpeg,image/png,image/webp" [disabled]="uploading" (change)="onPicture($event)" />
