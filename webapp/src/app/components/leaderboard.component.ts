@@ -4,7 +4,6 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../services/api.service';
 import { AuthService } from '../services/auth.service';
 import { ConfigService } from '../services/config.service';
-import { MembershipService } from '../services/membership.service';
 import { CourseNameService } from '../services/course-name.service';
 import { FaceComponent } from '../ui/face.component';
 import { ShellComponent } from '../ui/shell.component';
@@ -32,6 +31,7 @@ interface PlayedHole {
   strokes: number;
   kept: boolean | null;
   relative?: boolean;
+  standing?: number | null;
   players?: CardPlayer[];
 }
 
@@ -89,6 +89,7 @@ interface Board {
   firstRoundId: number | null;
   scoringEnabled?: boolean;
   inField?: boolean;
+  viewerRole?: string | null;
   rows: BoardRow[];
   field?: Array<{ userId: number; name: string; photos: string[]; faces?: FaceSlot[] }>;
   winners?: Array<{ place: number; name: string; photos: string[]; faces?: FaceSlot[] }>;
@@ -107,19 +108,17 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
   /** The public broadcast view drops the app chrome so it can live on a TV. */
   broadcast = false;
   tab: 'results' | 'leaderboard' = 'results';
-  eventOrganizer = false;
   board: Board | null = null;
   error = '';
   private expandedId: number | null = null;
-  private organizerKnown = false;
   tieRow: BoardRow | null = null;
+  tieTab: 'result' | 'rules' = 'result';
   private timer = 0;
 
   constructor(
     private route: ActivatedRoute,
     private api: ApiService,
     private auth: AuthService,
-    private membership: MembershipService,
     private config: ConfigService,
     private courseNames: CourseNameService
   ) {}
@@ -271,6 +270,7 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
   }
 
   showTiebreaker(row: BoardRow): void {
+    this.tieTab = 'result';
     this.tieRow = row;
   }
 
@@ -289,6 +289,34 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     const count = row.tiebreaker?.order.length ?? 0;
     const verb = count === 2 ? 'both finished' : 'all finished';
     return `${this.tieNames(row)} ${verb} at ${this.scoreLabel(row)}.`;
+  }
+
+  tieScore(row: BoardRow, description: string, value: number): string {
+    if (row.toPar == null) return String(value);
+    return this.toPar(value - this.strokeBasis(row, description));
+  }
+
+  /** Pars to remove when a step still stores strokes. A standing on the card is already versus par. */
+  private strokeBasis(row: BoardRow, description: string): number {
+    const holes = this.describedHoles(row, description);
+    if (holes.length === 0 || holes.some(hole => hole.standing != null)) return 0;
+    const perPlayer = this.board?.formatLabel === 'Team Up & Back';
+    return holes.reduce((sum, hole) => {
+      const players = hole.players?.length ?? 1;
+      return sum + (perPlayer && players > 1 ? hole.par * players : hole.par);
+    }, 0);
+  }
+
+  private describedHoles(row: BoardRow, description: string): PlayedHole[] {
+    const list = description.match(/\(([^)]+)\)/);
+    const single = description.match(/— Hole (\d+)/);
+    const numbers = list
+      ? list[1].split(',').map(part => Number(part.trim())).filter(hole => Number.isFinite(hole))
+      : single ? [Number(single[1])] : [];
+    const card = row.card ?? [];
+    return numbers
+      .map(hole => card.find(item => item.hole === hole))
+      .filter((hole): hole is PlayedHole => !!hole);
   }
 
   isMe(row: BoardRow): boolean {
@@ -340,29 +368,22 @@ export class LeaderboardComponent implements OnInit, OnDestroy {
     return `/admin/events/${this.eventId}`;
   }
 
+  get showAdmin(): boolean {
+    if (this.broadcast) return false;
+    const role = this.board?.viewerRole;
+    return role === 'organizer' || role === 'collector';
+  }
+
   private async refresh(quiet = false): Promise<void> {
     try {
       const board = await this.api.post<Board>('leaderboard', { eventId: this.eventId }, { quiet });
       await this.courseNames.ensureConfigurations(board.facilityId);
       this.board = board;
       this.error = '';
-      void this.loadOrganizer();
       this.syncRefresh();
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Leaderboard unavailable';
       this.syncRefresh();
-    }
-  }
-
-  private async loadOrganizer(): Promise<void> {
-    if (this.organizerKnown || this.broadcast || !this.auth.user()) return;
-    this.organizerKnown = true;
-    try {
-      const leagues = await this.membership.leagues();
-      const leagueId = this.board?.leagueId;
-      this.eventOrganizer = leagues.some(league => league.id === leagueId && league.role === 'organizer');
-    } catch {
-      this.eventOrganizer = false;
     }
   }
 

@@ -65,6 +65,7 @@ export class LeagueHomeComponent implements OnInit {
   past: LeagueEvent[] = [];
   members: Array<{ userId: number; displayName: string; role: string; handicapIndex: number; profilePictureUrl?: string | null }> = [];
   money: MoneyList | null = null;
+  moneyScope: 'season' | 'all' = 'season';
   openMoney = '';
   readonly formatIndex = formatHandicapIndex;
   readonly formatMoney = formatMoney;
@@ -105,6 +106,22 @@ export class LeagueHomeComponent implements OnInit {
 
   seasonName(): string {
     return this.seasons.find(season => season.id === this.seasonId)?.name || 'This season';
+  }
+
+  roleLabel(role: string): string {
+    if (role === 'organizer') return 'Organizer';
+    if (role === 'collector') return 'Treasurer';
+    return 'Player';
+  }
+
+  moneyRows(): MoneyRow[] {
+    if (!this.money) return [];
+    return this.moneyScope === 'season' ? this.money.season : this.money.allTime;
+  }
+
+  showMoney(scope: 'season' | 'all'): void {
+    this.moneyScope = scope;
+    this.openMoney = '';
   }
 
   moneyLabel(total: number): string {

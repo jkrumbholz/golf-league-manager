@@ -66,59 +66,39 @@
 
       @case ('money') {
         @if (money) {
-          <p class="section-label">{{ seasonName() }}</p>
-          <div class="card">
-            @for (row of money.season; track row.userId) {
-              <div class="lb-item">
-                <button type="button" class="row" [class.row-static]="row.lines.length === 0" (click)="toggleMoney('season', row)">
-                  <span class="face-slot">
-                    <app-face [urls]="row.profilePictureUrl ? [row.profilePictureUrl] : []" [name]="row.displayName"></app-face>
-                  </span>
-                  <span class="row-body">
-                    <span class="row-title">{{ row.displayName }}</span>
-                  </span>
-                  <span class="money-total" [class.money-none]="row.total <= 0">{{ moneyLabel(row.total) }}</span>
-                </button>
-                @if (moneyOpen('season', row)) {
-                  <div class="money-lines money-lines-name">
-                    @for (line of row.lines; track $index) {
-                      <div class="money-line">
-                        <span>{{ line.eventName }} · {{ line.label }}</span>
-                        <span>{{ formatMoney(line.amount) }}</span>
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
-            }
-          </div>
-
-          <p class="section-label">All time</p>
-          <div class="card">
-            @for (row of money.allTime; track row.userId) {
-              <div class="lb-item">
-                <button type="button" class="row" [class.row-static]="row.lines.length === 0" (click)="toggleMoney('all', row)">
-                  <span class="face-slot">
-                    <app-face [urls]="row.profilePictureUrl ? [row.profilePictureUrl] : []" [name]="row.displayName"></app-face>
-                  </span>
-                  <span class="row-body">
-                    <span class="row-title">{{ row.displayName }}</span>
-                  </span>
-                  <span class="money-total" [class.money-none]="row.total <= 0">{{ moneyLabel(row.total) }}</span>
-                </button>
-                @if (moneyOpen('all', row)) {
-                  <div class="money-lines money-lines-name">
-                    @for (line of row.lines; track $index) {
-                      <div class="money-line">
-                        <span>{{ line.eventName }} · {{ line.label }}</span>
-                        <span>{{ formatMoney(line.amount) }}</span>
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
-            }
-          </div>
+          <nav class="tabs">
+            <button type="button" class="tab" [class.tab-active]="moneyScope === 'season'" (click)="showMoney('season')">{{ seasonName() }}</button>
+            <button type="button" class="tab" [class.tab-active]="moneyScope === 'all'" (click)="showMoney('all')">All time</button>
+          </nav>
+          @if (moneyRows().length === 0) {
+            <p class="page-note">No payouts yet.</p>
+          } @else {
+            <div class="card">
+              @for (row of moneyRows(); track row.userId) {
+                <div class="lb-item">
+                  <button type="button" class="row" [class.row-static]="row.lines.length === 0" (click)="toggleMoney(moneyScope, row)">
+                    <span class="face-slot">
+                      <app-face [urls]="row.profilePictureUrl ? [row.profilePictureUrl] : []" [name]="row.displayName"></app-face>
+                    </span>
+                    <span class="row-body">
+                      <span class="row-title">{{ row.displayName }}</span>
+                    </span>
+                    <span class="money-total" [class.money-none]="row.total <= 0">{{ moneyLabel(row.total) }}</span>
+                  </button>
+                  @if (moneyOpen(moneyScope, row)) {
+                    <div class="money-lines money-lines-name">
+                      @for (line of row.lines; track $index) {
+                        <div class="money-line">
+                          <span>{{ line.eventName }} · {{ line.label }}</span>
+                          <span>{{ formatMoney(line.amount) }}</span>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
         }
       }
 
@@ -132,7 +112,7 @@
               </span>
               <span class="row-body">
                 <span class="row-title">{{ member.displayName }}</span>
-                <span class="row-meta">{{ member.role }} · {{ formatIndex(member.handicapIndex) }} index</span>
+                <span class="row-meta">{{ roleLabel(member.role) }} · {{ formatIndex(member.handicapIndex) }} index</span>
               </span>
             </div>
           }

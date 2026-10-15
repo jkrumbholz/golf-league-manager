@@ -167,6 +167,9 @@ describe('tiebreaker', () => {
     expect(steps[3].description).toBe('Handicap #2 — Hole 7');
     expect(steps[3].result).toBe('split');
     expect(steps[3].summary).toContain('Jason');
+    expect(steps[0].scores.every(item => item.score === 0)).toBe(true);
+    expect(steps[3].scores.find(item => item.name === 'Jason')?.score).toBe(-1);
+    expect(steps[3].scores.find(item => item.name === 'Mike')?.score).toBe(0);
   });
 
   test('resolves a three-way tie one group at a time', () => {

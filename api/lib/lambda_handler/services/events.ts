@@ -1,6 +1,6 @@
 import { randomInt } from 'crypto';
 import { Client } from 'pg';
-import { AuthUser, assertLeagueMember, assertOrganizer, leagueIdForEvent } from '../util/auth';
+import { AuthUser, assertLeagueMember, assertOrganizer, leagueIdForEvent, memberRole } from '../util/auth';
 import { HttpError } from '../util/http';
 import { hashPassword, newToken } from '../util/password';
 import {
@@ -31,6 +31,7 @@ import {
   usesRunningTee,
 } from '../scoring/scoring';
 import { eligiblePartnerIds, supportsVirtualPartner, virtualPartnerTeamName } from '../scoring/virtual-partner';
+import { planHandicapImport, reportHandicapImport } from './handicap-import';
 
 interface EventRow {
   id: number;
@@ -207,6 +208,8 @@ export async function saveLeague(client: Client, user: AuthUser, body: any) {
   if (body.action === 'removePlayer') return removeLeaguePlayer(client, user, body);
   if (body.action === 'createPlayer') return createLeaguePlayer(client, user, body);
   if (body.action === 'updatePlayer') return updateLeaguePlayer(client, user, body);
+  if (body.action === 'importHandicaps') return importHandicaps(client, user, body);
+  if (body.action === 'setCollector') return setMoneyCollector(client, user, body);
   if (body.action === 'accountLink') return createAccountLink(client, user, body);
   if (body.action === 'addToLeague') return addGuestToLeague(client, user, body);
   if (body.action === 'setLogo') return setLeagueLogo(client, user, body);
@@ -519,6 +522,7 @@ async function updateLeaguePlayer(client: Client, user: AuthUser, body: any) {
   const firstName = String(body.firstName || '').trim();
   const lastName = String(body.lastName || '').trim();
   const displayName = String(body.displayName || defaultDisplayName(firstName, lastName)).trim();
+  const ghinName = String(body.ghinName || '').trim() || null;
   const handicapIndex = Number(body.handicapIndex);
   if (!firstName || !lastName || !displayName) throw new HttpError('Name is required');
   if (!Number.isFinite(handicapIndex) || handicapIndex < -10 || handicapIndex > 54) {
@@ -528,12 +532,102 @@ async function updateLeaguePlayer(client: Client, user: AuthUser, body: any) {
   await client.query(
     `
       UPDATE app_user
-      SET first_name = $2, last_name = $3, display_name = $4, handicap_index = $5
+      SET first_name = $2, last_name = $3, display_name = $4, ghin_name = $5, handicap_index = $6
       WHERE id = $1
     `,
-    [userId, firstName, lastName, displayName, handicapIndex]
+    [userId, firstName, lastName, displayName, ghinName, handicapIndex]
   );
-  return { userId, firstName, lastName, displayName, handicapIndex };
+  return { userId, firstName, lastName, displayName, ghinName, handicapIndex };
+}
+
+async function importHandicaps(client: Client, user: AuthUser, body: any) {
+  const leagueId = Number(body.leagueId);
+  await assertOrganizer(client, leagueId, user.id);
+
+  const members = await client.query(
+    `
+      SELECT u.id AS "userId", u.first_name AS "firstName", u.last_name AS "lastName",
+             u.display_name AS "displayName", u.ghin_name AS "ghinName",
+             u.handicap_index::float AS "handicapIndex"
+      FROM league_member m
+      JOIN app_user u ON u.id = m.user_id
+      WHERE m.league_id = $1
+    `,
+    [leagueId]
+  );
+  const plan = planHandicapImport(members.rows, String(body.paste || ''));
+
+  let eventId = 0;
+  const eventRows = new Map<number, { handicapIndex: number; scored: boolean }>();
+  if (body.eventId != null && String(body.eventId).trim() !== '') {
+    eventId = Number(body.eventId);
+    const owner = await leagueIdForEvent(client, eventId);
+    if (owner !== leagueId) throw new HttpError('That event is not in this league', 404);
+    const userIds = plan.matches.map(match => match.userId);
+    if (userIds.length > 0) {
+      const registrations = await client.query(
+        `
+          SELECT r.user_id AS "userId",
+                 r.handicap_index::float AS "handicapIndex",
+                 EXISTS (
+                   SELECT 1
+                   FROM score s
+                   JOIN round rd ON rd.id = s.round_id
+                   WHERE rd.event_id = r.event_id AND s.user_id = r.user_id
+                 ) AS scored
+          FROM event_registration r
+          WHERE r.event_id = $1 AND r.user_id = ANY($2::int[])
+        `,
+        [eventId, userIds]
+      );
+      for (const row of registrations.rows) {
+        eventRows.set(Number(row.userId), {
+          handicapIndex: Number(row.handicapIndex),
+          scored: Boolean(row.scored),
+        });
+      }
+    }
+  }
+
+  const report = reportHandicapImport(plan, eventId ? eventRows : null);
+  if (body.preview || plan.matches.length === 0) return report;
+
+  await client.query('BEGIN');
+  try {
+    for (const match of plan.matches) {
+      await client.query(`UPDATE app_user SET handicap_index = $2 WHERE id = $1`, [match.userId, match.to]);
+      const event = eventRows.get(match.userId);
+      if (!eventId || !event || event.scored) continue;
+      await client.query(
+        `UPDATE event_registration SET handicap_index = $3 WHERE event_id = $1 AND user_id = $2`,
+        [eventId, match.userId, match.to]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+  return report;
+}
+
+async function setMoneyCollector(client: Client, user: AuthUser, body: any) {
+  const leagueId = Number(body.leagueId);
+  await assertOrganizer(client, leagueId, user.id);
+  const userId = Number(body.userId);
+  if (!userId) throw new HttpError('Choose a player');
+  const member = await client.query(
+    `SELECT role FROM league_member WHERE league_id = $1 AND user_id = $2`,
+    [leagueId, userId]
+  );
+  if (member.rows.length === 0) throw new HttpError('That player is not in this league', 404);
+  if (member.rows[0].role === 'organizer') throw new HttpError('Organizers already mark payments');
+  const role = body.collector ? 'collector' : 'player';
+  await client.query(
+    `UPDATE league_member SET role = $3 WHERE league_id = $1 AND user_id = $2`,
+    [leagueId, userId, role]
+  );
+  return { userId, role };
 }
 
 export async function listSeasons(client: Client, user: AuthUser, leagueId: number) {
@@ -562,7 +656,7 @@ export async function listSeasons(client: Client, user: AuthUser, leagueId: numb
   const members = await client.query(
     `
       SELECT u.id AS "userId", u.username, u.first_name AS "firstName", u.last_name AS "lastName",
-             u.display_name AS "displayName", m.role,
+             u.display_name AS "displayName", u.ghin_name AS "ghinName", m.role,
              u.handicap_index::float AS "handicapIndex",
              u.profile_picture_url AS "profilePictureUrl",
              (u.password_hash IS NOT NULL) AS "hasPassword"
@@ -861,7 +955,14 @@ export async function saveRegistration(client: Client, user: AuthUser, body: any
 
   const eventId = Number(body.eventId);
   const leagueId = await leagueIdForEvent(client, eventId);
-  await assertOrganizer(client, leagueId, user.id);
+  const role = await assertLeagueMember(client, leagueId, user.id);
+  const markingPayment = body.paid !== undefined || body.ctpPaid !== undefined || body.longDrivePaid !== undefined;
+  const managing = Boolean(body.refreshHandicaps) || Boolean(body.addPlayer);
+  if (managing || !markingPayment) {
+    if (role !== 'organizer') throw new HttpError('Only a league organizer can do that', 403);
+  } else if (role !== 'organizer' && role !== 'collector') {
+    throw new HttpError('Only a league organizer or treasurer can mark payments', 403);
+  }
 
   if (body.refreshHandicaps) {
     const updated = await client.query(
@@ -1646,6 +1747,7 @@ export async function getLeaderboard(client: Client, eventId: number, viewerId: 
     firstRoundId: bundle.rounds[0]?.id ?? null,
     scoringEnabled: Boolean(bundle.event.scoringEnabled),
     inField: viewerId != null && bundle.registrations.some(row => Number(row.userId) === viewerId),
+    viewerRole: viewerId == null ? null : await memberRole(client, bundle.event.leagueId, viewerId),
     rows,
     field: anyoneSeated(bundle) ? [] : currentField(bundle),
     winners: placeWinners(bundle),

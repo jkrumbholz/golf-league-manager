@@ -12,7 +12,9 @@ interface Member {
   firstName: string;
   lastName: string;
   displayName: string;
+  ghinName?: string | null;
   handicapIndex: number;
+  role: string;
 }
 
 @Component({
@@ -27,8 +29,10 @@ export class AdminPlayerEditComponent implements OnInit {
   firstName = '';
   lastName = '';
   displayName = '';
+  ghinName = '';
   handicapText = '';
   username: string | null = null;
+  role = '';
   link = '';
   copied = false;
   loaded = false;
@@ -56,7 +60,9 @@ export class AdminPlayerEditComponent implements OnInit {
       this.firstName = member.firstName;
       this.lastName = member.lastName;
       this.displayName = member.displayName;
+      this.ghinName = member.ghinName || '';
       this.username = member.username;
+      this.role = member.role;
       this.handicapText = formatHandicapIndex(member.handicapIndex);
       this.loaded = true;
     } catch (error: unknown) {
@@ -87,6 +93,7 @@ export class AdminPlayerEditComponent implements OnInit {
         firstName: string;
         lastName: string;
         displayName: string;
+        ghinName: string | null;
         handicapIndex: number;
       }>('league', {
         action: 'updatePlayer',
@@ -95,6 +102,7 @@ export class AdminPlayerEditComponent implements OnInit {
         firstName: this.firstName,
         lastName: this.lastName,
         displayName: this.displayName,
+        ghinName: this.ghinName,
         handicapIndex,
       });
       const me = this.auth.user();
@@ -117,6 +125,29 @@ export class AdminPlayerEditComponent implements OnInit {
 
   get hasLogin(): boolean {
     return this.username != null;
+  }
+
+  get collector(): boolean {
+    return this.role === 'collector';
+  }
+
+  async toggleCollector(): Promise<void> {
+    if (this.saving || this.role === 'organizer') return;
+    this.error = '';
+    this.saving = true;
+    try {
+      const saved = await this.api.put<{ role: string }>('league', {
+        action: 'setCollector',
+        leagueId: this.leagueId,
+        userId: this.userId,
+        collector: !this.collector,
+      });
+      this.role = saved.role;
+    } catch (error: unknown) {
+      this.error = error instanceof Error ? error.message : 'Could not change money collection';
+    } finally {
+      this.saving = false;
+    }
   }
 
   async copyAccountLink(): Promise<void> {

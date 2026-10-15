@@ -113,7 +113,7 @@ export interface HoleView {
   countingScore: number | null;
   /** Combo holes count both nets. The card shows that total; the round still ranks on to-par. */
   relative?: boolean;
-  /** This hole's contribution to the team score versus par. Tiebreakers use it when set. */
+  /** This hole versus par. Tiebreakers use it when set. */
   standing?: number | null;
   complete: boolean;
 }
@@ -532,6 +532,7 @@ function scorePlayer(
         kept,
       }],
       countingScore: counts ? net : null,
+      standing: counts && net !== null && format !== 'vegas' ? net - hole.par : null,
       complete: net !== null && decided,
     });
   });
@@ -612,6 +613,7 @@ function scoreTeam(
 
       total += countingScore;
       const parTarget = format === 'up_and_back' ? hole.par * lines.length : hole.par;
+      if (standing == null && trackToPar) standing = countingScore - parTarget;
       parSum += parTarget;
       thru += 1;
       counted = true;
