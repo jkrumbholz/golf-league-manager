@@ -4,11 +4,12 @@ import { Registration } from '../../models/dashboard';
 import { formatHandicapIndex } from '../../models/handicap';
 import { ShellComponent } from '../../ui/shell.component';
 import { AdminEventScreen } from './admin-event-screen';
+import { HandicapImportComponent } from './handicap-import.component';
 
 @Component({
   selector: 'app-admin-event-players',
   standalone: true,
-  imports: [ShellComponent],
+  imports: [ShellComponent, HandicapImportComponent],
   templateUrl: './admin-event-players.component.html',
 })
 export class AdminEventPlayersComponent extends AdminEventScreen implements OnInit {
@@ -22,10 +23,25 @@ export class AdminEventPlayersComponent extends AdminEventScreen implements OnIn
 
   async ngOnInit(): Promise<void> {
     await this.load();
+    if (this.dashboard && this.dashboard.role !== 'organizer' && this.dashboard.role !== 'collector') {
+      await this.router.navigate(['/events', this.eventId]);
+    }
+  }
+
+  get paymentsOnly(): boolean {
+    return this.dashboard?.role === 'collector';
   }
 
   staleIndex(player: Registration): boolean {
     return player.profileHandicapIndex != null && player.profileHandicapIndex !== player.handicapIndex;
+  }
+
+  async afterImport(): Promise<void> {
+    try {
+      await this.reload();
+    } catch (error: unknown) {
+      this.error = error instanceof Error ? error.message : 'Could not refresh players';
+    }
   }
 
   async refreshIndexes(): Promise<void> {

@@ -6,7 +6,7 @@
       <p class="section-label">{{ meta() }}</p>
 
       <div class="card">
-        <a class="row" [routerLink]="['/admin/events', eventId, 'course']">
+        <a class="row" [class.row-disabled]="paymentsOnly" [attr.tabindex]="paymentsOnly ? -1 : null" [routerLink]="setupLink(['/admin/events', eventId, 'course'])">
           <span class="row-body">
             <span class="row-title">Course</span>
             <span class="row-meta">{{ courseSummary() }}</span>
@@ -23,7 +23,7 @@
         </a>
 
         @if (teamFormat) {
-          <a class="row" [routerLink]="['/admin/events', eventId, 'teams']">
+          <a class="row" [class.row-disabled]="paymentsOnly" [attr.tabindex]="paymentsOnly ? -1 : null" [routerLink]="setupLink(['/admin/events', eventId, 'teams'])">
             <span class="row-body">
               <span class="row-title">Teams</span>
               <span class="row-meta">{{ dashboard.teams.length }} teams</span>
@@ -33,7 +33,7 @@
         }
 
         @if (virtualPartnerFormat) {
-          <a class="row" [routerLink]="['/admin/events', eventId, 'partner']">
+          <a class="row" [class.row-disabled]="paymentsOnly" [attr.tabindex]="paymentsOnly ? -1 : null" [routerLink]="setupLink(['/admin/events', eventId, 'partner'])">
             <span class="row-body">
               <span class="row-title">Virtual partner</span>
               <span class="row-meta">{{ partnerSummary() }}</span>
@@ -42,7 +42,7 @@
           </a>
         }
 
-        <a class="row" [routerLink]="['/admin/events', eventId, 'groups']">
+        <a class="row" [class.row-disabled]="paymentsOnly" [attr.tabindex]="paymentsOnly ? -1 : null" [routerLink]="setupLink(['/admin/events', eventId, 'groups'])">
           <span class="row-body">
             <span class="row-title">Tee sheet</span>
             <span class="row-meta">{{ groupSummary() }}</span>
@@ -51,7 +51,7 @@
         </a>
 
         @if (sideGames) {
-          <a class="row" [routerLink]="['/admin/events', eventId, 'side-games']">
+          <a class="row" [class.row-disabled]="paymentsOnly" [attr.tabindex]="paymentsOnly ? -1 : null" [routerLink]="setupLink(['/admin/events', eventId, 'side-games'])">
             <span class="row-body">
               <span class="row-title">Side games</span>
               <span class="row-meta">Record the winners</span>
@@ -60,7 +60,7 @@
           </a>
         }
 
-        <a class="row" [routerLink]="['/admin/events', eventId, 'payouts']">
+        <a class="row" [class.row-disabled]="paymentsOnly" [attr.tabindex]="paymentsOnly ? -1 : null" [routerLink]="setupLink(['/admin/events', eventId, 'payouts'])">
           <span class="row-body">
             <span class="row-title">Payouts</span>
             <span class="row-meta">{{ dashboard.payouts.length }} recorded</span>
@@ -68,7 +68,7 @@
           <span class="chevron">&#8250;</span>
         </a>
 
-        <a class="row" [routerLink]="['/admin/events', eventId, 'settings']">
+        <a class="row" [class.row-disabled]="paymentsOnly" [attr.tabindex]="paymentsOnly ? -1 : null" [routerLink]="setupLink(['/admin/events', eventId, 'settings'])">
           <span class="row-body">
             <span class="row-title">Fees &amp; options</span>
             <span class="row-meta">Entry {{ dashboard.event.entryFee }}</span>
@@ -76,7 +76,7 @@
           <span class="chevron">&#8250;</span>
         </a>
 
-        <a class="row" [routerLink]="['/admin/events', eventId, 'share']">
+        <a class="row" [class.row-disabled]="paymentsOnly" [attr.tabindex]="paymentsOnly ? -1 : null" [routerLink]="setupLink(['/admin/events', eventId, 'share'])">
           <span class="row-body">
             <span class="row-title">Signup link</span>
             <span class="row-meta">Share with individuals</span>
@@ -85,12 +85,16 @@
         </a>
       </div>
 
-      <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="setScoring(!dashboard.event.scoringEnabled)">
-        {{ dashboard.event.scoringEnabled ? 'Turn scoring off' : 'Turn scoring on' }}
-      </button>
-      <p class="page-note">{{ dashboard.event.scoringEnabled ? 'Players in this event can enter scores.' : 'Score entry is closed until you turn it on.' }}</p>
+      @if (!paymentsOnly) {
+        <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="setScoring(!dashboard.event.scoringEnabled)">
+          {{ dashboard.event.scoringEnabled ? 'Turn scoring off' : 'Turn scoring on' }}
+        </button>
+        <p class="page-note">{{ dashboard.event.scoringEnabled ? 'Players in this event can enter scores.' : 'Score entry is closed until you turn it on.' }}</p>
+      }
       <a class="btn-primary" [routerLink]="['/events', eventId]">View leaderboard</a>
-      <button class="btn-quiet btn-danger btn-wide" type="button" [disabled]="busy" (click)="archive()">Archive event</button>
+      @if (!paymentsOnly) {
+        <button class="btn-quiet btn-danger btn-wide" type="button" [disabled]="busy" (click)="archive()">Archive event</button>
+      }
     }
 
     @if (error) { <p class="error">{{ error }}</p> }

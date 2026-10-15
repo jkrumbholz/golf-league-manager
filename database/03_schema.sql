@@ -20,6 +20,8 @@ CREATE TABLE app_user (
     first_name          TEXT NOT NULL,
     last_name           TEXT NOT NULL,
     display_name        TEXT NOT NULL,
+    -- Name as copied from GHIN, when a nickname would miss the handicap paste.
+    ghin_name           TEXT,
     handicap_index      NUMERIC(4,1) NOT NULL DEFAULT 0,
     profile_picture_url TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -61,7 +63,7 @@ CREATE TABLE league (
 CREATE TABLE league_member (
     league_id   INTEGER NOT NULL REFERENCES league(id) ON DELETE CASCADE,
     user_id     INTEGER NOT NULL REFERENCES app_user(id),
-    role        TEXT NOT NULL CHECK (role IN ('organizer', 'player')),
+    role        TEXT NOT NULL CHECK (role IN ('organizer', 'player', 'collector')),
     joined_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (league_id, user_id)
 );

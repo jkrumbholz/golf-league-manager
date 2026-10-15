@@ -27,6 +27,12 @@
         </label>
 
         <label class="field">
+          <span class="field-label">GHIN name</span>
+          <input name="ghinName" [(ngModel)]="ghinName" placeholder="David Costlow" />
+          <span class="field-hint">Optional. The name on the GHIN list, when it differs from the first and last name.</span>
+        </label>
+
+        <label class="field">
           <span class="field-label">Handicap index</span>
           <input name="handicapIndex" inputmode="decimal" [(ngModel)]="handicapText" placeholder="10.4 or +1.4" />
           @if (fieldErrors['handicapIndex']) {
@@ -38,6 +44,22 @@
 
         <button class="btn-primary" type="submit" [disabled]="saving">Save player</button>
       </form>
+
+      @if (role === 'organizer') {
+        <p class="page-note">Organizers already mark payments.</p>
+      } @else {
+        <div class="card">
+          <div class="row row-static">
+            <span class="row-body">
+              <span class="row-title">Treasurer</span>
+              <span class="row-meta">Can mark players paid on events in this league.</span>
+            </span>
+            <button class="pill" type="button" [class.pill-muted]="!collector" [disabled]="saving" (click)="toggleCollector()">
+              {{ collector ? 'On' : 'Off' }}
+            </button>
+          </div>
+        </div>
+      }
 
       <button class="btn-secondary btn-wide" type="button" (click)="copyAccountLink()">
         {{ hasLogin ? 'Copy password reset link' : 'Copy setup link' }}

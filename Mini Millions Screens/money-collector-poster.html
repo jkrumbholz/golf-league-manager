@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Collecting the money</title>
+  <style>
+    :root {
+      --bg: #0d1b3e;
+      --card: #16295c;
+      --ink: #ffffff;
+      --muted: #8d9cc4;
+      --faint: #5f70a3;
+      --gold: #f5c518;
+      --line: #2b3d70;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #071228;
+      color: var(--ink);
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+
+    .poster {
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--bg);
+      padding: 48px 28px 64px;
+    }
+
+    header { text-align: center; }
+
+    h1 {
+      margin: 10px 0 0;
+      color: var(--gold);
+      font-size: clamp(32px, 5.5vw, 52px);
+      line-height: 0.95;
+      letter-spacing: -0.02em;
+      text-transform: uppercase;
+    }
+
+    .lede {
+      max-width: 36rem;
+      margin: 16px auto 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.45;
+    }
+
+    .feature {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 28px;
+      align-items: center;
+      margin-top: 48px;
+    }
+
+    .feature.reverse { direction: rtl; }
+    .feature.reverse > * { direction: ltr; }
+
+    .phone {
+      width: 280px;
+      margin: 0 auto;
+      padding: 12px 12px 16px;
+      border-radius: 32px;
+      background: #07101f;
+      border: 1px solid var(--line);
+    }
+
+    .screen {
+      overflow: hidden;
+      border-radius: 20px;
+      background: var(--bg);
+      min-height: 420px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 36px 1fr 36px;
+      align-items: center;
+      padding: 14px 8px 6px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .bar span:first-child,
+    .bar span:last-child {
+      text-align: center;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .bar strong {
+      text-align: center;
+      font-size: 15px;
+      letter-spacing: 0.01em;
+    }
+
+    .format {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 6px 14px 10px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .format b {
+      flex: 1;
+      text-align: center;
+      font-weight: 800;
+    }
+
+    .admin {
+      flex: none;
+      border: 1px solid var(--gold);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: var(--gold);
+      box-shadow: 0 0 0 4px rgba(245, 197, 24, 0.16);
+    }
+
+    .label {
+      margin: 8px 14px 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .card {
+      margin: 0 10px;
+      border-radius: 14px;
+      background: var(--card);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 12px;
+      border-top: 1px solid rgba(43, 61, 112, 0.9);
+    }
+
+    .row:first-child { border-top: 0; }
+
+    .who { flex: 1; min-width: 0; }
+    .who strong { display: block; font-size: 14px; }
+    .who span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .score {
+      color: var(--gold);
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .dim { opacity: 0.38; }
+
+    .live {
+      box-shadow: inset 3px 0 0 var(--gold);
+    }
+
+    .chev { color: var(--faint); font-size: 18px; line-height: 1; }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      max-width: 132px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      padding: 5px 8px;
+      background: var(--gold);
+      color: var(--bg);
+      font-size: 10px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .chip.off {
+      background: rgba(141, 156, 196, 0.18);
+      color: var(--muted);
+    }
+
+    .step {
+      margin: 0 0 8px;
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+
+    p { margin: 12px 0 0; font-size: 17px; line-height: 1.45; }
+
+    .start {
+      margin-top: 56px;
+      padding: 28px 24px;
+      border-radius: 18px;
+      background: var(--card);
+      text-align: center;
+    }
+
+    .start h2 { font-size: 28px; }
+    .start p { max-width: 34rem; margin-left: auto; margin-right: auto; }
+
+    footer {
+      margin-top: 28px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 700px) {
+      .poster { padding: 32px 16px 48px; }
+      .feature,
+      .feature.reverse {
+        grid-template-columns: 1fr;
+        direction: ltr;
+        text-align: center;
+      }
+      .phone { width: min(280px, 86vw); }
+    }
+
+    @media print {
+      body { background: var(--bg); }
+      .poster { max-width: none; }
+      .feature { break-inside: avoid; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <article class="poster">
+    <header>
+      <h1>Collecting the money</h1>
+      <p class="lede">You’re a treasurer. Open the event, tap Admin, then mark each player when the cash is in your hand.</p>
+    </header>
+
+    <section class="feature">
+      <div class="phone" aria-hidden="true">
+        <div class="screen">
+          <div class="bar"><span>‹</span><strong>Thursday Night</strong><span>☰</span></div>
+          <div class="format">
+            <b>Best ball</b>
+            <span class="admin">Admin</span>
+          </div>
+          <p class="label">Thru 6</p>
+          <div class="card">
+            <div class="row"><div class="who"><strong>Alex M</strong><span>1</span></div><span class="score">−2</span></div>
+            <div class="row"><div class="who"><strong>Sam R</strong><span>2</span></div><span class="score">E</span></div>
+            <div class="row"><div class="who"><strong>Chris T</strong><span>3</span></div><span class="score">+1</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="step">1 · Open the event</p>
+        <h2>Admin opens a new tab</h2>
+        <p>It’s the gold pill next to the format name, on the right. Tap it and the collection screen opens in a new tab. The event stays open behind it. If you don’t see Admin, the organizer hasn’t turned you on yet. You don’t need to sign out and back in.</p>
+      </div>
+    </section>
+
+    <section class="feature reverse">
+      <div class="phone" aria-hidden="true">
+        <div class="screen">
+          <div class="bar"><span>‹</span><strong>Thursday Night</strong><span></span></div>
+          <p class="label">Best ball · Thu</p>
+          <div class="card">
+            <div class="row dim"><div class="who"><strong>Course</strong><span>18 holes loaded</span></div><span class="chev">›</span></div>
+            <div class="row live"><div class="who"><strong>Players &amp; payments</strong><span>24 signed up · 11 paid</span></div><span class="chev">›</span></div>
+            <div class="row dim"><div class="who"><strong>Teams</strong><span>12 teams</span></div><span class="chev">›</span></div>
+            <div class="row dim"><div class="who"><strong>Tee sheet</strong><span>6 tee times</span></div><span class="chev">›</span></div>
+            <div class="row dim"><div class="who"><strong>Payouts</strong><span>Not yet</span></div><span class="chev">›</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="step">2 · Tap Admin</p>
+        <h2>Only one row is yours</h2>
+        <p>Players &amp; payments is the one that stays bright. Course, teams, the tee sheet, and payouts are dimmed. Leave those alone.</p>
+      </div>
+    </section>
+
+    <section class="feature">
+      <div class="phone" aria-hidden="true">
+        <div class="screen">
+          <div class="bar"><span>‹</span><strong>Players</strong><span></span></div>
+          <p class="label">Tap a chip when you have the cash</p>
+          <div class="card">
+            <div class="row">
+              <div class="who"><strong>Alex M</strong><span>10.4 index</span></div>
+              <span class="chips"><span class="chip off">Owes</span><span class="chip off">CTP</span></span>
+            </div>
+            <div class="row">
+              <div class="who"><strong>Sam R</strong><span>8.2 index</span></div>
+              <span class="chips"><span class="chip">Paid</span><span class="chip">CTP</span></span>
+            </div>
+            <div class="row">
+              <div class="who"><strong>Chris T</strong><span>14.1 index</span></div>
+              <span class="chips"><span class="chip off">Owes</span><span class="chip">CTP</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="step">3 · Mark them paid</p>
+        <h2>Gold means you have the cash</h2>
+        <p>Tap Owes and it turns into Paid. Closest to Pin works the same way. Gray means they still owe. Tap a gold chip again if you marked the wrong person.</p>
+      </div>
+    </section>
+
+    <section class="start">
+      <h2>That’s the whole job</h2>
+      <p>Open the event, tap Admin, open Players &amp; payments, and tap the chip when the money is in your hand.</p>
+    </section>
+
+    <footer>Mini Millions · Treasurers</footer>
+  </article>
+</body>
+</html>

@@ -15,7 +15,7 @@
         <span></span>
         <p class="section-label">{{ board.formatLabel }}</p>
         <span class="format-side">
-          @if (eventOrganizer) {
+          @if (showAdmin) {
             <a class="format-admin" [href]="adminHref" target="_blank" rel="noopener">Admin</a>
           }
         </span>
@@ -136,9 +136,7 @@
                           <span></span>
                           @for (player of cardPlayers(row); track player.name) {
                             <span class="lb-player-cell">
-                              <span></span>
                               <span class="lb-card-player">{{ player.name }}</span>
-                              <span></span>
                             </span>
                           }
                           <span class="lb-card-player lb-team-label">Team</span>
@@ -151,43 +149,45 @@
                             <span class="lb-card-meta">Par {{ hole.par }}</span>
                             @for (player of hole.players ?? []; track player.name) {
                               <span class="lb-player-cell">
-                                <span class="lb-card-marks">
+                                <span class="lb-player-figures">
                                   @if (player.strokes > 0) {
-                                    @for (dot of strokeDots(player.strokes); track dot) {
-                                      <span class="sc-dot"></span>
-                                    }
+                                    <span class="lb-card-marks">
+                                      @for (dot of strokeDots(player.strokes); track dot) {
+                                        <span class="sc-dot"></span>
+                                      }
+                                    </span>
                                   }
                                   @if (player.strokes < 0) {
                                     <span class="lb-card-give">{{ givenMarks(player.strokes) }}</span>
                                   }
+                                  <span class="lb-player-gross">{{ player.gross ?? '–' }}</span>
+                                  <span class="lb-card-net">{{ player.gross != null && player.net != null && player.net !== player.gross ? player.net : '' }}</span>
                                 </span>
-                                <span class="lb-player-gross">{{ player.gross ?? '–' }}</span>
-                                <span class="lb-card-net">{{ player.gross != null && player.net != null && player.net !== player.gross ? player.net : '' }}</span>
                               </span>
                             }
                             <span class="lb-team-score">{{ teamScore(hole) }}</span>
                           </div>
                         } @else {
                           <div class="lb-card-row">
-                            <span class="lb-card-hole">
-                              <span>{{ hole.hole }}</span>
-                              @if (hole.strokes > 0) {
-                                <span class="lb-card-marks">
-                                  @for (dot of strokeDots(hole.strokes); track dot) {
-                                    <span class="sc-dot"></span>
-                                  }
-                                </span>
-                              }
-                              @if (hole.strokes < 0) {
-                                <span class="lb-card-give">{{ givenMarks(hole.strokes) }}</span>
-                              }
-                            </span>
+                            <span class="lb-card-hole">{{ hole.hole }}</span>
                             <span class="lb-card-meta">Par {{ hole.par }}</span>
                             <span class="lb-card-score">
-                              {{ hole.kept === false ? 'Out' : hole.gross }}
-                              @if (hole.kept !== false && hole.net != null) {
-                                <span class="lb-card-net">{{ hole.net }}</span>
-                              }
+                              <span class="lb-player-figures">
+                                @if (hole.strokes > 0) {
+                                  <span class="lb-card-marks">
+                                    @for (dot of strokeDots(hole.strokes); track dot) {
+                                      <span class="sc-dot"></span>
+                                    }
+                                  </span>
+                                }
+                                @if (hole.strokes < 0) {
+                                  <span class="lb-card-give">{{ givenMarks(hole.strokes) }}</span>
+                                }
+                                {{ hole.kept === false ? 'Out' : hole.gross }}
+                                @if (hole.kept !== false && hole.net != null) {
+                                  <span class="lb-card-net">{{ hole.net }}</span>
+                                }
+                              </span>
                             </span>
                           </div>
                         }
@@ -198,9 +198,10 @@
                           <span></span>
                           @for (player of cardPlayers(row); track player.name; let index = $index) {
                             <span class="lb-player-cell">
-                              <span></span>
-                              <span class="lb-player-gross">{{ playerGrossTotal(row, index) }}</span>
-                              <span class="lb-card-net">{{ playerNetTotal(row, index) !== playerGrossTotal(row, index) ? playerNetTotal(row, index) : '' }}</span>
+                              <span class="lb-player-figures">
+                                <span class="lb-player-gross">{{ playerGrossTotal(row, index) }}</span>
+                                <span class="lb-card-net">{{ playerNetTotal(row, index) !== playerGrossTotal(row, index) ? playerNetTotal(row, index) : '' }}</span>
+                              </span>
                             </span>
                           }
                           <span class="lb-team-score">{{ teamColumnTotal(row) }}</span>
@@ -254,17 +255,30 @@
     <div class="modal-back" (click)="closeTiebreaker()">
       <div class="modal" role="dialog" aria-labelledby="tie-title" (click)="$event.stopPropagation()">
         <h2 id="tie-title">Tiebreaker</h2>
-        <p>{{ tieIntro(tieRow!) }}</p>
-        @for (step of tie.steps; track $index) {
-          <p class="modal-label">{{ step.description }}</p>
-          @for (score of step.scores; track score.competitorId) {
-            <p class="modal-score">{{ score.name }}: {{ score.score }}</p>
+        <nav class="tabs">
+          <button type="button" class="tab" [class.tab-active]="tieTab === 'result'" (click)="tieTab = 'result'">Result</button>
+          <button type="button" class="tab" [class.tab-active]="tieTab === 'rules'" (click)="tieTab = 'rules'">How it works</button>
+        </nav>
+        @if (tieTab === 'result') {
+          <p>{{ tieIntro(tieRow!) }}</p>
+          @for (step of tie.steps; track $index) {
+            <p class="modal-label">{{ step.description }}</p>
+            @for (score of step.scores; track score.competitorId) {
+              <p class="modal-score">{{ score.name }}: {{ tieScore(tieRow!, step.description, score.score) }}</p>
+            }
+            <p class="modal-summary" [class.modal-winner]="step.result === 'split'">{{ step.summary }}</p>
           }
-          <p class="modal-summary" [class.modal-winner]="step.result === 'split'">{{ step.summary }}</p>
-        }
-        <p class="modal-label">Final result</p>
-        @for (person of tie.order; track person.competitorId) {
-          <p class="modal-score">{{ person.rank }}. {{ person.name }}</p>
+          <p class="modal-label">Final result</p>
+          @for (person of tie.order; track person.competitorId) {
+            <p class="modal-score">{{ person.rank }}. {{ person.name }}</p>
+          }
+        } @else {
+          <p>When players finish on the same score, the lower score wins each step. Every score is the net score against par.</p>
+          <p class="tie-rule"><strong>First, total last 4 holes.</strong> The last four holes on the card being played. On the front nine those are 6, 7, 8, and 9. On the back nine those are 15, 16, 17, and 18.</p>
+          <p class="tie-rule"><strong>Next, total last 3 holes.</strong> If the last four are tied, the last three holes of that same nine.</p>
+          <p class="tie-rule"><strong>Finally, handicap holes.</strong> If those are still tied, each hole is compared in handicap order. Handicap #1 is first, then #2, and on through the card. The hole number is the hole on the course.</p>
+          <p>A step that is still tied moves on. When a step splits the group, the lower score finishes ahead, and anyone still tied continues. If every step matches, they stay tied.</p>
+          <p>On a team card, the hole score is the one the format counts, such as the best ball, still measured against par. A thrown-out hole is left out. If a step needs a score that is missing, that step is skipped.</p>
         }
         <button class="btn-secondary" type="button" (click)="closeTiebreaker()">Close</button>
       </div>

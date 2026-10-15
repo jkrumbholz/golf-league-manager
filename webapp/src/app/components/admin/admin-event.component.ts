@@ -30,6 +30,10 @@ export class AdminEventComponent implements OnInit {
     this.eventId = Number(this.route.snapshot.paramMap.get('eventId'));
     try {
       this.dashboard = await this.api.post<Dashboard>('dashboard', { eventId: this.eventId });
+      if (this.dashboard.role !== 'organizer' && this.dashboard.role !== 'collector') {
+        await this.router.navigate(['/events', this.eventId]);
+        return;
+      }
       await this.courseNames.ensureConfigurations(this.dashboard.event.facilityId);
     } catch (error: unknown) {
       this.error = error instanceof Error ? error.message : 'Could not load this event';
@@ -37,7 +41,16 @@ export class AdminEventComponent implements OnInit {
   }
 
   get backTo(): unknown[] {
+    if (this.paymentsOnly) return ['/events', this.eventId];
     return this.dashboard ? ['/admin/seasons', this.dashboard.event.seasonId] : ['/admin/leagues'];
+  }
+
+  get paymentsOnly(): boolean {
+    return this.dashboard?.role === 'collector';
+  }
+
+  setupLink(commands: unknown[]): unknown[] | null {
+    return this.paymentsOnly ? null : commands;
   }
 
   get teamFormat(): boolean {

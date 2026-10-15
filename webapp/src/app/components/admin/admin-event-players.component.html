@@ -31,11 +31,13 @@
                 @if (dashboard.event.longDriveEnabled) {
                   <button class="pill" type="button" [class.pill-muted]="!player.longDrivePaid" [disabled]="busy" (click)="toggleLongDrive(player)">Long Drive</button>
                 }
-                @if (isGuest(player)) {
+                @if (isGuest(player) && !paymentsOnly) {
                   <button class="pill" type="button" [disabled]="busy" (click)="addToLeague(player)">Add to league</button>
                 }
               </span>
-              <button class="btn-quiet btn-danger" type="button" [disabled]="busy" (click)="remove(player)">Remove</button>
+              @if (!paymentsOnly) {
+                <button class="btn-quiet btn-danger" type="button" [disabled]="busy" (click)="remove(player)">Remove</button>
+              }
             </div>
           }
         </div>
@@ -51,9 +53,12 @@
         </p>
       }
 
-      <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="refreshIndexes()">Refresh indexes</button>
-      <p class="page-note">{{ notice || 'Pulls in the current profile index. A player who has posted a score keeps the index from this event.' }}</p>
-      <button class="btn-primary" type="button" (click)="add()">Add players</button>
+      @if (!paymentsOnly) {
+        <app-handicap-import [leagueId]="dashboard.event.leagueId" [eventId]="eventId" [disabled]="busy" (applied)="afterImport()"></app-handicap-import>
+        <button class="btn-secondary btn-block" type="button" [disabled]="busy" (click)="refreshIndexes()">Refresh indexes</button>
+        <p class="page-note">{{ notice || 'Pulls in the current profile index. A player who has posted a score keeps the index from this event.' }}</p>
+        <button class="btn-primary" type="button" (click)="add()">Add players</button>
+      }
     }
 
     @if (error) { <p class="error">{{ error }}</p> }

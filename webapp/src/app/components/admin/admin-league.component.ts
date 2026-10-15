@@ -6,6 +6,7 @@ import { ImageService } from '../../services/image.service';
 import { formatHandicapIndex } from '../../models/handicap';
 import { FaceComponent } from '../../ui/face.component';
 import { ShellComponent } from '../../ui/shell.component';
+import { HandicapImportComponent } from './handicap-import.component';
 
 interface Season {
   id: number;
@@ -30,7 +31,7 @@ interface Member {
 @Component({
   selector: 'app-admin-league',
   standalone: true,
-  imports: [RouterLink, ShellComponent, FaceComponent],
+  imports: [RouterLink, ShellComponent, FaceComponent, HandicapImportComponent],
   templateUrl: './admin-league.component.html',
 })
 export class AdminLeagueComponent implements OnInit {
@@ -60,6 +61,11 @@ export class AdminLeagueComponent implements OnInit {
       this.tab = params.get('tab') === 'players' ? 'players' : 'seasons';
     });
 
+    await this.load();
+  }
+
+  async load(): Promise<void> {
+    this.error = '';
     try {
       const page = await this.api.post<{
         league: { name: string; logoImageUrl: string | null };
@@ -80,7 +86,9 @@ export class AdminLeagueComponent implements OnInit {
   }
 
   memberRole(member: Member): string {
-    return member.role === 'organizer' ? 'Organizer' : 'Player';
+    if (member.role === 'organizer') return 'Organizer';
+    if (member.role === 'collector') return 'Treasurer';
+    return 'Player';
   }
 
   async remove(member: Member): Promise<void> {

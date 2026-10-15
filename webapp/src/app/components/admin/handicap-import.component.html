@@ -1,0 +1,94 @@
+<button class="btn-secondary btn-block" type="button" [disabled]="disabled" (click)="show()">Update handicaps</button>
+
+@if (open) {
+  <div class="modal-back">
+    <div class="modal modal-sheet" role="dialog" aria-labelledby="handicap-import-title" (click)="$event.stopPropagation()">
+      <h2 id="handicap-import-title">{{ step === 'review' ? 'Review handicaps' : step === 'done' ? 'Handicaps updated' : 'Update handicaps' }}</h2>
+
+      @if (step === 'paste') {
+        <p>Paste from GHIN. Each player is the name, the course, then the index.</p>
+        <textarea
+          class="handicap-paste"
+          name="ghinPaste"
+          [(ngModel)]="paste"
+          spellcheck="false"
+          placeholder="Danny Noonan&#10;Bushwood Country Club&#10;9.1"
+        ></textarea>
+        @if (error) { <p class="error">{{ error }}</p> }
+        <button class="btn-primary" type="button" [disabled]="saving || !paste.trim()" (click)="review()">
+          {{ saving ? 'Reviewing' : 'Review' }}
+        </button>
+        <button class="btn-secondary" type="button" [disabled]="saving" (click)="close()">Cancel</button>
+      } @else if (result) {
+        @if (step === 'review') {
+          <p>Nothing is saved until you update.</p>
+        }
+        @if (result.changed.length === 0) {
+          <p>{{ step === 'review' ? 'No handicaps would change.' : 'No handicaps changed.' }}</p>
+        } @else {
+          <p class="modal-label">{{ step === 'review' ? 'Would change' : 'Changed' }}</p>
+          @for (change of result.changed; track change.userId) {
+            <p class="handicap-result">{{ changeLabel(change) }}</p>
+          }
+        }
+
+        @if (result.unchanged > 0) {
+          <p class="page-note">{{ result.unchanged }} already {{ step === 'review' ? 'have' : 'had' }} this index.</p>
+        }
+
+        @if (result.duplicates.length > 0) {
+          <p class="modal-label">{{ step === 'review' ? 'Will not update' : 'Not updated' }}</p>
+          @for (row of result.duplicates; track row.name) {
+            <p class="handicap-result">{{ row.name }} — {{ row.detail }}</p>
+          }
+        }
+
+        @if (result.missing.length > 0) {
+          <p class="modal-label">In the league, not in this paste</p>
+          @for (row of result.missing; track row.userId) {
+            <p class="handicap-result">{{ row.displayName }}</p>
+          }
+        }
+
+        @if (result.unmatched.length > 0) {
+          <p class="modal-label">In the paste, not in this league</p>
+          @for (name of result.unmatched; track name) {
+            <p class="handicap-result">{{ name }}</p>
+          }
+        }
+
+        @if (result.unreadable.length > 0) {
+          <p class="modal-label">Could not read an index</p>
+          @for (row of result.unreadable; track row.name) {
+            <p class="handicap-result">{{ row.name }} — {{ row.indexText }}</p>
+          }
+        }
+
+        @if (result.eventKept.length > 0) {
+          <p class="modal-label">{{ step === 'review' ? 'This event will keep its index' : 'This event kept its index' }}</p>
+          @for (row of result.eventKept; track row.displayName) {
+            <p class="handicap-result">
+              @if (step === 'review') {
+                {{ row.displayName }} will keep {{ formatIndex(row.eventIndex) }} on this event because a score is posted.
+                Profile would become {{ formatIndex(row.profileIndex) }}.
+              } @else {
+                {{ row.displayName }} still uses {{ formatIndex(row.eventIndex) }} because a score is posted.
+                Profile is now {{ formatIndex(row.profileIndex) }}.
+              }
+            </p>
+          }
+        }
+
+        @if (error) { <p class="error">{{ error }}</p> }
+        @if (step === 'review') {
+          <button class="btn-primary" type="button" [disabled]="saving || result.changed.length === 0" (click)="confirm()">
+            {{ saving ? 'Updating' : 'Update' }}
+          </button>
+          <button class="btn-secondary" type="button" [disabled]="saving" (click)="back()">Back</button>
+        } @else {
+          <button class="btn-primary" type="button" (click)="close()">Done</button>
+        }
+      }
+    </div>
+  </div>
+}
